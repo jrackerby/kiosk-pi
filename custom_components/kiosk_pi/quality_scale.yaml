@@ -151,22 +151,37 @@ rules:
     comment: Re-provisioning a panel regenerates its password, so this is a
       routine step rather than an incident.
   test-coverage:
-    status: todo
+    status: done
     comment: |
-      HONEST STATUS. tests/ covers setup, unload, the migration refusal, the
-      entity surface as a SET, availability semantics, the current-page dwell
-      in all three directions, the write path for each control platform, and
-      the board-filter policy. What it does NOT yet cover: the image platform's
-      fetch-and-invalidate behaviour, the notify overlay, the options flow's
-      three branches, and diagnostics redaction. Below the 95% the rule asks
-      for; raising it is jrackerby/kiosk-pi#10.
+      The four areas this rule was held `todo` for are covered
+      (jrackerby/kiosk-pi#3): the options flow's three branches, the image
+      platform, the notify overlay, and diagnostics redaction. Alongside the
+      existing coverage of setup, unload, the migration refusal, the entity
+      surface as a SET, availability semantics, the current-page dwell in all
+      three directions, the write path for each control platform, and the
+      board-filter policy.
+
+      EACH OF THE FOUR WAS PROVEN TO DISCRIMINATE, not merely to pass: the
+      merge assertion was run against all three branches returning their own
+      keys, the stale-frame assertion against a last-good fallback, the join
+      assertion against a dropped title, and the redaction sweep against
+      `TO_REDACT` covering only the entry's copy. Each failed there and passes
+      here. A coverage test that has never been run against the fault it names
+      is a line in a report, not a gate.
+
+      THE MERGE IS THE ONE THAT MATTERED. `async_create_entry(data=...)`
+      replaces `entry.options` wholesale, so a step returning only its own keys
+      deletes every other step's, silently. It is only observable across two
+      steps, so each test seeds a key the step under test does not know about
+      and asserts it survived.
 
   # --- Gold: reported where already met, so nobody re-derives it -------------
   devices:
     status: done
   diagnostics:
     status: done
-    comment: Both passwords redacted — the entry's and the agent's own copy in
+    comment: |
+      Both passwords redacted — the entry's and the agent's own copy in
       the settings map. The SSID is not, deliberately: it is not a credential
       and it is the most useful field for diagnosing a panel that roams.
   discovery:

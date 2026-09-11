@@ -55,6 +55,7 @@ DEVICE_INFO: dict[str, Any] = {
     "screenBrightnessMax": 9,
     "screenInstrument": "wlr-randr",
     "displayOutput": "HDMI-A-1",
+    "displayMake": "ASUSTek COMPUTER INC",
     "displayModel": "ROG XG27AQ",
     "resolution": "2560x1440",
     "orientation": "normal",

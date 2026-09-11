@@ -18,6 +18,19 @@
 #     rollback is `systemctl disable --now pikioskd && systemctl enable --now
 #     kiosk` and nothing has been destroyed to make that harder.
 #   - It does not reboot. A wall reboots when an operator decides it does.
+#   - IT DOES NOT ARM unattended-upgrades, AND THAT IS A RULING, NOT AN
+#     OMISSION (jrackerby/kiosk-pi#10). The fleet standard this inherited from
+#     jrackerby/HA#58 had the provisioning script write four artefacts —
+#     `unattended-upgrades` installed, `20auto-upgrades`, `51kiosk-unattended`
+#     and an `apt-daily-upgrade.timer` drop-in — and a drift sensor to catch
+#     their reversion. Patching is now driven FROM Home Assistant by
+#     `linux_monitor`'s `update.<host>_system_updates`, which reports, offers
+#     Install, and owns the reboot that follows. ONE HOST, ONE PATCHER: arming
+#     unattended-upgrades here as well would put two of them on one machine,
+#     racing for the same dpkg lock, with the HA-side Install reporting a
+#     failure it did not cause. If that ever reverses, the four artefacts and
+#     the drift check come back TOGETHER — the standard was only ever safe
+#     because something watched it.
 #
 # IT REFUSES TO FINISH SILENTLY. Every step that can fail is checked, and the
 # script ends by reading the agent's own API back through the loopback — a unit

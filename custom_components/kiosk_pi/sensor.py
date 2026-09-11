@@ -1,10 +1,19 @@
 """Sensors: what the panel is showing, and the few host readings that explain it.
 
 WHAT IS DELIBERATELY ABSENT. apt state, kernel versions, pending updates, NIC
-inventory as entities — ``linux_monitor`` owns generic OS health for every host
-in this estate, and each of these panels already has an entry from it. A second
-copy here would put two integrations on one device page reporting one fact from
-two transports, which is how a host grows two health sensors that disagree.
+inventory as entities — AND THE HOST'S IP ADDRESS AND UPTIME — ``linux_monitor``
+and ``cyber_estate`` own generic OS health for every host in this estate, and
+each of these panels already has an entry from both. A second copy here would
+put two integrations on one device page reporting one fact from two transports,
+which is how a host grows two health sensors that disagree.
+
+THAT IS NOT A THEORY: 1.0.0 shipped ``ip_address`` and ``uptime`` anyway and
+every one of them landed as a ``_2`` beside the owner's — except on one panel,
+where kiosk_pi won the race and took the canonical ``sensor.<host>_ip_address``
+while ``cyber_estate``'s became the ``_2``. The registry never frees an id, so
+the collision is permanent in whichever direction it happened to fall. Disabling
+the losers in the registry is undone by the next reinstall; not registering them
+is not (jrackerby/HA#467, jrackerby/kiosk-pi#6).
 
 What is here earns its place by answering a question about the PANEL. Memory and
 temperature explain a browser that keeps dying; the link readings explain a
@@ -15,7 +24,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -32,7 +40,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import dt as dt_util
 
 from . import KioskPiConfigEntry
 from .coordinator import KioskPiCoordinator
@@ -66,31 +73,19 @@ class KioskPiSensorDescription(SensorEntityDescription):
     attrs_fn: Callable[[KioskPiCoordinator], dict[str, Any]] | None = None
 
 
-def _uptime(coordinator: KioskPiCoordinator) -> datetime | None:
-    """The boot time, as a timestamp — not a counter.
+def _monitor(coordinator: KioskPiCoordinator) -> str | None:
+    """The screen's own identity, from its EDID.
 
-    A seconds-since-boot sensor writes a new state on every single poll, which
-    fills the recorder for a value nothing reads at that resolution. The boot
-    INSTANT is constant between reboots, so it writes once per reboot and the
-    frontend renders the elapsed time from it.
+    MAKE AND MODEL ARE JOINED HERE, NOT AT THE AGENT. ``wlr-randr`` reports
+    them as two EDID fields and the agent publishes them as two, because one of
+    them is routinely absent and a pre-joined string cannot say which half is
+    missing. A monitor reporting only ``Make:`` is still identified; a state
+    reading "ASUS None" identifies nothing.
     """
-    seconds = (coordinator.data or {}).get("uptimeSeconds")
-    if seconds is None:
-        return None
-    return dt_util.utcnow() - timedelta(seconds=float(seconds))
-
-
-def _primary_ip(coordinator: KioskPiCoordinator) -> str | None:
-    """The address on the interface that is actually up.
-
-    NO INTERFACE NAME IS ASSUMED. This fleet is on wifi today with eth0 down,
-    and a hardcoded ``wlan0`` is the same class of mistake as a hardcoded
-    hostname table: correct until somebody plugs in a cable.
-    """
-    for nic in (coordinator.data or {}).get("interfaces") or []:
-        if isinstance(nic, dict) and nic.get("ipv4") and nic.get("state") == "up":
-            return str(nic["ipv4"])
-    return None
+    data = coordinator.data or {}
+    parts = [str(p) for p in (data.get("displayMake"), data.get("displayModel"))
+             if p]
+    return " ".join(parts) or None
 
 
 SENSORS: tuple[KioskPiSensorDescription, ...] = (
@@ -187,19 +182,31 @@ SENSORS: tuple[KioskPiSensorDescription, ...] = (
             "instrument": (c.data or {}).get("screenInstrument"),
         },
     ),
+    # THE TWO READINGS THE RETIRED SSH LADDER CARRIED (jrackerby/kiosk-pi#7).
+    # Both were readable off `command_line` sensors until that ladder was
+    # retired, and 1.0.0 published neither: the SSID only as an attribute of
+    # the signal sensor, where nothing can template over the fleet, and the
+    # make not at all. An attribute is not readable off the registry, which is
+    # the whole of what a glass inventory is.
     KioskPiSensorDescription(
-        key="ip_address",
-        translation_key="ip_address",
+        key="ssid",
+        translation_key="ssid",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_primary_ip,
-        attrs_fn=lambda c: {"interfaces": (c.data or {}).get("interfaces") or []},
+        value_fn=lambda c: ((c.data or {}).get("wifi") or {}).get("ssid"),
+        attrs_fn=lambda c: {
+            "interface": ((c.data or {}).get("wifi") or {}).get("interface"),
+        },
     ),
     KioskPiSensorDescription(
-        key="uptime",
-        translation_key="uptime",
-        device_class=SensorDeviceClass.TIMESTAMP,
+        key="monitor",
+        translation_key="monitor",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_uptime,
+        value_fn=_monitor,
+        attrs_fn=lambda c: {
+            "make": (c.data or {}).get("displayMake"),
+            "model": (c.data or {}).get("displayModel"),
+            "output": (c.data or {}).get("displayOutput"),
+        },
     ),
 )
 

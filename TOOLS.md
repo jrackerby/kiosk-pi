@@ -186,6 +186,34 @@ the integration. Traps about Home Assistant's own instruments live in
   always present when a driver is bound and needs no package and no privileges.
   `nmcli` reports a 0–100 quality PERCENTAGE, which is a different quantity from
   dBm and is derived from it.
+- **NO POINTER DEVICE MEANS THE CURSOR NEVER MOVES AND NEVER LEAVES.**
+  Chromium's Ozone/Wayland cursor path needs a `wl_pointer` enter serial to
+  change or clear the cursor surface, and on a Pi with no mouse that serial
+  never arrives — so whatever arrow was drawn at launch stays exactly where it
+  is, for ever. `cage` has no cursor-hide option and there is no Chromium flag
+  for it. `cursor: none` FROM INSIDE THE PAGE is what makes Chromium commit a
+  null cursor surface, which is why the fix is an extension and not a switch.
+  A CDP screenshot never contains the compositor cursor, so
+  `image.<host>_screenshot` cannot answer whether it worked — that needs
+  `grim -c` on the host or eyes on the glass.
+- **`--load-extension` IS A BRANDED-CHROME QUESTION, NOT A VERSION QUESTION,
+  AND THE VERSION NUMBER IS THE MISLEADING HALF.** Google-BRANDED Chrome
+  restricted the switch at 137 and removed it — together with its
+  `--disable-features=DisableLoadExtensionCommandLineSwitch` escape hatch — at
+  142. Unbranded Chromium keeps both, and Raspberry Pi OS packages unbranded
+  Chromium, which is what `chromiumBinary` defaults to. Measured on the live
+  fleet 2026-09-11: all four panels report 152.0.7977.82. THAT IS THE VERSION
+  AND NOT THE BEHAVIOUR — whether an extension actually loads on these hosts
+  is unverified, and stays unverified until somebody reads a wall. Reading the
+  version alone says "past 142, therefore broken" and is wrong here; carrying
+  the workaround "just in case" writes a gate that does not govern this fleet
+  into the flag set. On a branded build the switch is
+  ignored SILENTLY — the browser starts, the wall paints, the extension is
+  simply absent — so the agent logs the directory it loaded from.
+- **CHROMIUM KEEPS ONE `--disable-features` AND DOES NOT SAY WHICH.** A second
+  one appended anywhere discards the first, with no warning and no way to tell
+  from the process table which survived. Compose the value from a list of
+  feature names so adding one is an edit to a list, never a new flag.
 - **`ANCHOR ON THE `URL=` LINE** when reading a start URL out of a legacy
   `kiosk.sh`, never on "the first URL in the file". These scripts document their
   own history in comments, so a pattern that can match prose eventually matches

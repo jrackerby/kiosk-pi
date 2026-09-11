@@ -25,6 +25,7 @@ it, because Chromium's behaviour on a repeated flag is not specified and
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shlex
@@ -39,6 +40,18 @@ from typing import Any, Callable
 from .cdp import Browser, CDPError
 
 _LOGGER = logging.getLogger(__name__)
+
+# THERE IS EXACTLY ONE `--disable-features`, AND IT IS COMPOSED, NEVER REPEATED.
+# Chromium keeps one of a repeated flag and does not say which, so a second one
+# appended anywhere silently discards the first. Composing from a tuple of
+# feature names makes adding one an edit to a list rather than a new flag.
+DISABLED_FEATURES: tuple[str, ...] = (
+    # The translate bar. Belt and braces with --disable-infobars; it has
+    # NOTHING TO DO WITH THE CURSOR, whatever the comment that sat here until
+    # jrackerby/kiosk-pi#9 said. See `cursor_extension_dir` below for what
+    # actually addresses that.
+    "TranslateUI",
+)
 
 # What makes a browser a kiosk. Each of these has a reason; none is decoration.
 BASE_FLAGS: tuple[str, ...] = (
@@ -58,9 +71,67 @@ BASE_FLAGS: tuple[str, ...] = (
     "--password-store=basic",
     # A monitor board plays its own audio cues with no user gesture available.
     "--autoplay-policy=no-user-gesture-required",
-    # The cursor is otherwise stranded mid-screen on the Wayland path.
-    "--disable-features=TranslateUI",
+    "--disable-features=" + ",".join(DISABLED_FEATURES),
 )
+
+# THE HIDE-CURSOR EXTENSION, WRITTEN BY THE AGENT RATHER THAN BY THE INSTALLER.
+#
+# The fault: these panels have no pointer device, and Chromium's Ozone/Wayland
+# cursor path needs a `wl_pointer` enter serial that never arrives, so whatever
+# cursor was drawn at launch stays where it is — a default arrow stranded on a
+# wall board for ever. `cage` has no cursor-hide option and there is no Chromium
+# flag for it; setting `cursor: none` from inside the page is what makes
+# Chromium commit a null cursor surface, which is why the fix is an extension
+# and not a switch.
+#
+# 0.x SHIPPED THIS AS FILES THE INSTALLER LAID DOWN UNDER /home/kiosk, and
+# nothing ever checked they were still there or still loaded. The agent writes
+# them itself, on every launch, into its own StateDirectory: there is then no
+# drift between what the installer wrote and what the browser is told to load,
+# a reimaged host cannot lose it, and it cannot land under /home, which
+# ProtectHome=read-only makes unwritable anyway.
+#
+# `--load-extension` IS BEING WITHDRAWN, AND THIS FLEET IS NOT AFFECTED — the
+# distinction is branded vs unbranded, not the version number, and getting it
+# backwards either way writes a wrong version gate into a header. GOOGLE-BRANDED
+# Chrome restricted the switch at 137 and removed it, with its
+# `DisableLoadExtensionCommandLineSwitch` escape hatch, at 142. Unbranded
+# Chromium — which is what Raspberry Pi OS packages, and what
+# `chromiumBinary` defaults to — keeps it. Measured on the live fleet: all four
+# panels report Chromium 152.0.7977.82 from the distribution package. If a panel
+# is ever pointed at a branded build this stops working SILENTLY, which is why
+# the agent logs the directory it loaded from.
+#
+# WHAT IT DOES NOT COVER, stated rather than discovered later: a content script
+# cannot reach `chrome-error://chromewebdata`, so the cursor is not hidden on
+# Chromium's own network-error interstitial. The agent navigates away from that
+# page rather than living on it, so the exposure is the seconds before the
+# outage page loads — not a wall's steady state.
+CURSOR_EXTENSION_FILES: dict[str, str] = {
+    "manifest.json": json.dumps(
+        {
+            "manifest_version": 3,
+            "name": "pikioskd hide cursor",
+            "version": "1.0",
+            "description": (
+                "Hides the pointer on a panel that has no pointer device."
+            ),
+            "content_scripts": [
+                {
+                    "matches": ["<all_urls>"],
+                    "css": ["hide-cursor.css"],
+                    "run_at": "document_start",
+                    "all_frames": True,
+                }
+            ],
+        },
+        indent=2,
+    )
+    + "\n",
+    # `!important` because a board may set its own cursor, and on a panel with
+    # no pointer every one of those is wrong.
+    "hide-cursor.css": "*, *::before, *::after { cursor: none !important; }\n",
+}
 
 
 def merge_flags(base: tuple[str, ...] | list[str], extra: list[str]) -> list[str]:
@@ -172,9 +243,51 @@ class BrowserSupervisor:
 
     # --- launching ----------------------------------------------------------
 
+    def cursor_extension_dir(self) -> str:
+        """Where the hide-cursor extension lives — beside the profile.
+
+        Under the profile's parent rather than inside it: Chromium rewrites the
+        profile directory as it pleases, and an extension it is being asked to
+        load from there is a directory the loader and the profile writer both
+        own.
+        """
+        profile = str(self._settings.get("chromiumProfileDir"))
+        return os.path.join(os.path.dirname(profile) or ".", "hide-cursor")
+
+    def write_cursor_extension(self) -> str | None:
+        """Materialise the extension. Returns its directory, or None on failure.
+
+        A FAILURE HERE IS NOT FATAL AND IS NOT SILENT. A wall with a visible
+        cursor is a blemish; a wall that will not start is an outage, so an
+        unwritable state directory costs the cursor fix and nothing else. It is
+        logged as a warning because it needs an edit — nobody can wait it out.
+        """
+        directory = self.cursor_extension_dir()
+        try:
+            os.makedirs(directory, exist_ok=True)
+            for name, content in CURSOR_EXTENSION_FILES.items():
+                path = os.path.join(directory, name)
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+        except OSError as err:
+            _LOGGER.warning(
+                "cannot write the hide-cursor extension to %s: %s. The panel "
+                "will start with a visible pointer.", directory, err
+            )
+            return None
+        # Logged at INFO on every launch, because the one failure mode left is
+        # a branded Chromium ignoring the switch without saying so: the
+        # directory named here and no cursor on the glass is the discriminator.
+        _LOGGER.info("loading the hide-cursor extension from %s", directory)
+        return directory
+
     def command(self, url: str) -> list[str]:
         settings = self._settings
         flags = merge_flags(BASE_FLAGS, list(settings.get("chromiumFlags")))
+        if settings.get("hideCursor"):
+            directory = self.write_cursor_extension()
+            if directory is not None:
+                flags = merge_flags(flags, [f"--load-extension={directory}"])
         flags = merge_flags(flags, [
             f"--remote-debugging-port={int(settings.get('cdpPort'))}",
             f"--user-data-dir={settings.get('chromiumProfileDir')}",

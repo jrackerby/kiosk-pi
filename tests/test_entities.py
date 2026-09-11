@@ -66,7 +66,7 @@ async def test_readings_come_off_the_panel(
         "http://boards.invalid/alert-monitor/"
     assert hass.states.get("sensor.office_wall_cpu_temperature").state == "52.1"
     assert hass.states.get("sensor.office_wall_browser_restarts").state == "2"
-    assert hass.states.get("sensor.office_wall_ip_address").state == "192.0.2.10"
+    assert hass.states.get("sensor.office_wall_ssid").state == "Example"
     assert hass.states.get("binary_sensor.office_wall_browser").state == STATE_ON
     assert hass.states.get("switch.office_wall_screen").state == STATE_ON
     # Settings, from the second call of the same refresh.
@@ -75,23 +75,52 @@ async def test_readings_come_off_the_panel(
         "http://boards.invalid/alert-monitor/"
 
 
-async def test_the_ip_sensor_reads_the_interface_that_is_up(
+async def test_the_monitor_sensor_joins_make_and_model(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
     no_app_probes,
 ) -> None:
-    """No interface name is assumed anywhere.
+    """Both EDID halves reach the state, and both stay addressable separately.
 
-    The fleet is on wifi with eth0 down; a hardcoded wlan0 is the same class of
-    mistake as a hardcoded hostname table.
+    The agent used to publish ``model or make`` as one field, so a make was
+    unrecoverable from the payload. Joining is the RENDER decision and belongs
+    here; the attributes keep the two fields apart for anything templating over
+    the fleet (jrackerby/kiosk-pi#7).
     """
-    info = {**DEVICE_INFO, "interfaces": [
-        {"name": "wlan0", "mac": "aa:bb:cc:dd:ee:01", "ipv4": None, "state": "down"},
-        {"name": "eth0", "mac": "aa:bb:cc:dd:ee:02", "ipv4": "192.0.2.99",
-         "state": "up"},
-    ]}
-    mock_agent(aioclient_mock, device_info=info)
+    mock_agent(aioclient_mock)
     await setup(hass, config_entry)
-    assert hass.states.get("sensor.office_wall_ip_address").state == "192.0.2.99"
+
+    state = hass.states.get("sensor.office_wall_monitor")
+    assert state.state == "ASUSTek COMPUTER INC ROG XG27AQ"
+    assert state.attributes["make"] == "ASUSTek COMPUTER INC"
+    assert state.attributes["model"] == "ROG XG27AQ"
+    assert state.attributes["output"] == "HDMI-A-1"
+
+
+async def test_a_monitor_reporting_only_one_edid_half_is_still_identified(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """Half an EDID identifies a screen. A join that prints "None" does not.
+
+    Either field may legitimately be absent, so the state carries whichever
+    half arrived rather than a string with a hole in it — and an output with
+    neither reads `unknown`, never an empty state.
+    """
+    make_only = {**DEVICE_INFO, "displayModel": None}
+    mock_agent(aioclient_mock, device_info=make_only)
+    await setup(hass, config_entry)
+    assert hass.states.get("sensor.office_wall_monitor").state == \
+        "ASUSTek COMPUTER INC"
+
+
+async def test_an_output_with_no_edid_at_all_reads_unknown(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    neither = {**DEVICE_INFO, "displayMake": None, "displayModel": None}
+    mock_agent(aioclient_mock, device_info=neither)
+    await setup(hass, config_entry)
+    assert hass.states.get("sensor.office_wall_monitor").state == STATE_UNKNOWN
 
 
 async def test_an_unreadable_reading_is_unavailable_not_off(

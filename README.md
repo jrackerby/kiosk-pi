@@ -260,8 +260,10 @@ Two suites, two Python versions, two dependency sets. The agent's runs on 3.11
 third-party import, because that check cannot be left to a README line: a
 dependency added here does not fail in CI, it fails on a Pi during an upgrade.
 
-Traps that have bitten in this repository are recorded in
-[`TOOLS.md`](TOOLS.md).
+How the pieces fit together — the agent, the coordinator, the transport, the
+failure dispositions, the one dwell and its direction — is
+[`docs/architecture.md`](docs/architecture.md). Traps that have bitten in this
+repository are recorded in [`TOOLS.md`](TOOLS.md).
 
 Issues and feature requests:
 [jrackerby/kiosk-pi/issues](https://github.com/jrackerby/kiosk-pi/issues).
