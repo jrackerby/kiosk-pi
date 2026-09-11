@@ -208,6 +208,16 @@ registry never frees an id. Chromium's version **does** belong here — that is
 the browser this integration exists for, not a system package — and so does
 `throttle`, read from the Pi's own firmware.
 
+**ONE HOST, ONE PATCHER.** The same line settles the installer: `install.sh`
+does not arm `unattended-upgrades` and does not write the apt fleet standard's
+four artefacts, because patching is driven from Home Assistant by
+`linux_monitor`'s `update.<host>_system_updates` — which reports, offers
+Install, and owns the reboot that follows. Two patchers on one machine race for
+the same dpkg lock, and the HA-side Install reports a failure it did not cause.
+If that ever reverses, the four artefacts and the drift check that watched them
+come back together; the standard was only ever safe because something watched
+it.
+
 **The counts, not the states, are the signals.** `browser_restarts` is a
 `TOTAL_INCREASING` sensor because a crash-looping Chromium under
 `Restart=always` reports `active` on every poll that lands between crashes;
