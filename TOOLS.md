@@ -57,6 +57,13 @@ the integration. Traps about Home Assistant's own instruments live in
 - `aioclient_mock` matches on the **full URL including the query**. A mock
   keyed on the path alone answers `listSettings` with a `deviceInfo` payload
   and every assertion downstream still passes.
+- **THE TWO SUITES CANNOT SHARE A VENV.** This harness pulls in
+  `pytest-socket`, which blocks every `socket.socket` for the whole session,
+  and `agent/tests/test_server.py` binds a real loopback server — so the
+  agent suite errors with `SocketBlockedError` on every server test while
+  its own `requirements-test.txt` is blameless. `-p no:socket` does not
+  clear it. CI never sees this because each suite is its own job with its
+  own install; locally, one venv per suite. Measured 2026-09-11.
 
 ## `hassfest` and the quality scale
 
@@ -93,6 +100,15 @@ the integration. Traps about Home Assistant's own instruments live in
   `back=chrome-error://chromewebdata/`: a dead link on a page whose whole job is
   to say which board is down. Read the code from the document and the URL from
   `/json/list`.
+- **NO CONNECTED OUTPUT MEANS NO CDP, WHILE THE BROWSER READS RUNNING.** With
+  `/sys/class/drm/card0-HDMI-A-1` `disconnected`, `cage` starts, Chromium
+  starts, the process table is full, `browserRunning` is `true` and the
+  restart count is 0 — and `:9222` is never opened, so `currentURL`,
+  `cursorStyle` and the monitor all read `None`. On the HA side that is
+  `current_page` unknown, `monitor` unknown and `cursor_hidden` unavailable
+  on a panel whose browser is `on`. Read the DRM status before diagnosing
+  the browser; it is a bench host with nothing plugged in. Measured on the
+  bench panel, 2026-09-11.
 - **`/json/list`'s key ORDER IS NOT A CONTRACT.** Parse it as JSON. A pattern
   assuming `type` precedes `url` reads the wrong field the day Chromium
   reorders them, and reads it confidently.
