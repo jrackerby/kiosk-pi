@@ -187,11 +187,11 @@
       "resolution": {
         "name": "Resolution"
       },
-      "ip_address": {
-        "name": "IP address"
+      "ssid": {
+        "name": "SSID"
       },
-      "uptime": {
-        "name": "Uptime"
+      "monitor": {
+        "name": "Monitor"
       }
     },
     "switch": {

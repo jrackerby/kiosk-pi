@@ -149,6 +149,42 @@ def test_unknown_properties_do_not_break_known_ones():
     assert Display().parse_outputs(text)[0]["model"] == "ROG XG27AQ"
 
 
+def test_state_reports_make_and_model_as_two_fields(monkeypatch):
+    """Collapsing them loses the make outright (jrackerby/kiosk-pi#7).
+
+    ``state()`` used to publish ``model or make`` under one key, so a screen
+    reporting only a make was indistinguishable from one reporting only a
+    model, and the make could not be recovered by any consumer. Asserting on
+    BOTH keys is what makes the collapse fail here: an assertion on `model`
+    alone passes against the old code.
+    """
+    display = Display()
+    monkeypatch.setattr(display, "outputs",
+                        lambda: display.parse_outputs(WLR_RANDR))
+    monkeypatch.setattr(display, "brightness", lambda: (None, None))
+
+    record = display.state()
+    assert record["make"] == "ASUSTek COMPUTER INC"
+    assert record["model"] == "ROG XG27AQ"
+
+
+def test_an_output_with_no_edid_reports_neither_half(monkeypatch):
+    """Absent is absent. A make standing in for a missing model is a lie.
+
+    HDMI-A-2 in the fixture carries no Make: and no Model: line at all, so both
+    keys must come back None rather than one borrowing the other's value.
+    """
+    display = Display(output_name="HDMI-A-2")
+    monkeypatch.setattr(display, "outputs",
+                        lambda: display.parse_outputs(WLR_RANDR))
+    monkeypatch.setattr(display, "brightness", lambda: (None, None))
+
+    record = display.state()
+    assert record["output"] == "HDMI-A-2"
+    assert record["make"] is None
+    assert record["model"] is None
+
+
 # --- host readings -----------------------------------------------------------
 
 def test_throttle_flags_are_named():

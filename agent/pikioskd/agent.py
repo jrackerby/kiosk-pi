@@ -379,6 +379,7 @@ class KioskAgent:
             "screenBrightnessMax": screen["brightnessMax"],
             "screenInstrument": screen["instrument"],
             "displayOutput": screen["output"],
+            "displayMake": screen["make"],
             "displayModel": screen["model"],
             "resolution": screen["resolution"],
             "orientation": screen["orientation"],

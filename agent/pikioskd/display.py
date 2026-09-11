@@ -183,6 +183,7 @@ class Display:
         record: dict[str, Any] = {
             "on": None,
             "output": None,
+            "make": None,
             "model": None,
             "resolution": None,
             "orientation": None,
@@ -196,10 +197,19 @@ class Display:
             chosen = next(
                 (o for o in outputs if o["name"] == wanted), outputs[0]
             ) if wanted else outputs[0]
+            # MAKE AND MODEL ARE REPORTED SEPARATELY, NOT COLLAPSED. Both are
+            # EDID fields and `parse_outputs` has read both since 1.0.0; the
+            # record used to publish `model or make`, so a monitor that reports
+            # only a make was indistinguishable from one that reports only a
+            # model, and the make was unrecoverable from the payload either way
+            # (jrackerby/kiosk-pi#7). Either half may legitimately be absent —
+            # an EDID-less output reports neither — so both stay None-able and
+            # the consumer decides how to render one half.
             record.update({
                 "on": chosen.get("enabled"),
                 "output": chosen.get("name"),
-                "model": chosen.get("model") or chosen.get("make"),
+                "make": chosen.get("make"),
+                "model": chosen.get("model"),
                 "resolution": chosen.get("mode"),
                 "orientation": chosen.get("transform"),
                 "instrument": "wlr-randr",
