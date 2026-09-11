@@ -1,0 +1,75 @@
+[Unit]
+Description=Raspberry Pi kiosk agent (pikioskd)
+Documentation=https://github.com/jrackerby/kiosk-pi
+# The agent OWNS the browser, so it must not race the retired kiosk.service for
+# the DRM device. Conflicts= stops both being active at once even if somebody
+# re-enables the old unit by hand during a recovery.
+Conflicts=kiosk.service
+# systemd only accepts this in [Unit]; in [Service] it is parsed as an unknown
+# key and IGNORED, which reads in the journal as a one-line warning nobody
+# chases and leaves the default start limit in force.
+StartLimitIntervalSec=0
+After=network-online.target systemd-user-sessions.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kiosk
+Group=kiosk
+# The compositor needs a seat and the DRM/input devices. These are the groups a
+# Raspberry Pi OS image puts them in; the installer verifies membership rather
+# than assuming it.
+SupplementaryGroups=video render input tty
+
+Environment=PYTHONUNBUFFERED=1
+# `python3 -m` already prepends the working directory, but stating the
+# path means a unit edited to run from elsewhere still finds the package
+# instead of failing with an import error that reads like a bad install.
+Environment=PYTHONPATH=/opt/pikioskd
+# One value, fleet-wide. A per-host variant here is a defect, not hardware:
+# display.py and browser.py both DEFER to an XDG_RUNTIME_DIR already in the
+# environment, so this is the single place it is decided for a systemd start.
+Environment=XDG_RUNTIME_DIR=/run/kiosk-wayland
+RuntimeDirectory=kiosk-wayland
+RuntimeDirectoryMode=0700
+
+ExecStart=/usr/bin/python3 -m pikioskd --settings /etc/pikioskd/settings.json
+WorkingDirectory=/opt/pikioskd
+
+# Restart=always with NO backoff of its own. The agent already backs its own
+# browser restarts off exponentially and publishes the count; a systemd-level
+# retry storm on top of that would hide the agent's own signal and burn the SD
+# card. StartLimitIntervalSec=0 keeps systemd from giving up permanently on a
+# panel that had a bad week, which would leave the wall dark until somebody
+# noticed.
+Restart=always
+RestartSec=5
+
+# The agent reboots the host and writes /etc/pikioskd, so it is not sandboxed
+# to nothing — but it has no business writing anywhere else.
+#
+# NoNewPrivileges IS DELIBERATELY OFF, AND IT CANNOT BE ON. It sets
+# PR_SET_NO_NEW_PRIVS, which stops a setuid binary from elevating at all —
+# sudo detects it and refuses outright: "The \"no new privileges\" flag is set,
+# which prevents sudo from running as root." `rebootDevice` is the agent's one
+# privileged verb and it goes through sudo, so switching this on forbids the
+# exact operation the sudoers drop-in exists to allow, and does it silently:
+# the reboot is scheduled in a detached shell whose failure nobody reads.
+# The real boundary is /etc/sudoers.d/pikioskd, which grants ONE command.
+# Measured with prctl(PR_SET_NO_NEW_PRIVS) against a real setuid sudo,
+# 2026-09-10; test_unit_sandbox.py asserts the pairing cannot come back.
+NoNewPrivileges=no
+ProtectSystem=full
+ReadWritePaths=/etc/pikioskd /tmp
+# CHROMIUM'S PROFILE LIVES HERE, NOT UNDER /home. ProtectHome=read-only makes
+# every path under /home unwritable, and Chromium exits 21 within a second
+# when it cannot write --user-data-dir. The unit still reads `active` because
+# Restart=always applies to the AGENT, which is fine — so the wall goes black
+# while systemd reports success. Keep this directory and the settings default
+# in agent/pikioskd/settings.py in step; test_unit_sandbox.py asserts they are.
+StateDirectory=pikioskd
+ProtectHome=read-only
+PrivateTmp=no
+
+[Install]
+WantedBy=multi-user.target

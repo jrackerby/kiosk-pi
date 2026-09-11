@@ -1,0 +1,101 @@
+name: validate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    # HACS and hassfest both move under us. A repo that only validates on push
+    # goes quietly stale between commits, and this one can sit untouched for
+    # months.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # NO STAGING STEP ANY MORE. It used to exist because the integration
+      # lived at the repository root (hacs.json content_in_root) while
+      # hassfest takes no path input and scans custom_components/* at the
+      # workspace root. 1.0.0 moved the integration into the standard layout —
+      # partly so the device-side agent could live at the root without being
+      # shipped into /config/custom_components alongside it — and the staging
+      # copy went with it. A copy step that silently moved nothing would have
+      # let hassfest validate an empty tree and report green.
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # HACS fetches hacs.json and manifest.json from raw.githubusercontent.com
+      # with NO Authorization header, in CI and in a live install alike, so a
+      # PRIVATE repository 404s there and the failure reads as "invalid
+      # hacs.json". Reported as VOID rather than green: the check did not run,
+      # so nothing was proven either way.
+      - name: VOID -- HACS validation cannot run against a private repository
+        if: ${{ github.event.repository.private }}
+        run: |
+          echo "::notice title=HACS validation VOID::this repository is private, so HACS cannot read it"
+          echo "Nothing about HACS compatibility was verified in this run."
+
+      - uses: hacs/action@main
+        if: ${{ !github.event.repository.private }}
+        with:
+          category: integration
+          # `brands` needs an accepted PR against home-assistant/brands, which
+          # takes core integrations only, so the check can never pass from
+          # here. quality_scale.yaml records the same thing as an exemption.
+          ignore: brands
+
+  agent:
+    name: agent suite (standard library only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # THE OLDEST PYTHON THE AGENT CLAIMS TO SUPPORT, not the newest available.
+      # install.sh refuses below 3.11, and a suite that only ever runs on the
+      # latest interpreter cannot tell you whether that claim is true. Raspberry
+      # Pi OS lags the runner by more than one release.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Installed from the file BESIDE THE SUITE, never from a list written
+      # here: a list in a workflow is a second copy that goes stale on the next
+      # import added, and its failure reads as a broken test rather than as a
+      # missing declaration.
+      - run: pip install -r agent/requirements-test.txt
+
+      - run: python -m pytest
+        working-directory: agent
+
+  integration:
+    name: integration suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - run: pip install -r requirements-test.txt
+
+      - run: python -m pytest

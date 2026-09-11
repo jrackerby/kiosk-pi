@@ -1,0 +1,46 @@
+# A `device_id` FIELD WITH A DEVICE SELECTOR, NOT A `target:`.
+#
+# hassfest refuses `device` under `target` outright — script/hassfest/services.py
+# raises "Services do not support device filters on target, use a device
+# selector instead" for any `target` carrying a `device` key, in every form. The
+# older `target: {device: {integration: ...}}` shape that several integrations
+# still carry is exactly what that rule was added to stop.
+#
+# These act on the PANEL rather than on any one reading of it, which is why
+# there is no entity target: picking an arbitrary entity to stand for the device
+# would let two entities on the same panel be passed together as if that meant
+# something.
+load_url:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: kiosk_pi
+          multiple: true
+    url:
+      required: true
+      example: "http://boards.example.invalid/alert-monitor/"
+      selector:
+        text:
+
+set_config:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            - integration: kiosk_pi
+          multiple: true
+    key:
+      required: true
+      example: "timeToScreensaverV2"
+      selector:
+        text:
+    value:
+      required: true
+      example: "900"
+      selector:
+        text:

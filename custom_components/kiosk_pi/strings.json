@@ -1,0 +1,254 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add a kiosk panel",
+        "description": "Install the pikioskd agent on the Raspberry Pi first (agent/install.sh in this repository). The installer prints the panel's remote-admin password once and stores it at /etc/pikioskd/settings.json.",
+        "data": {
+          "host": "Host",
+          "password": "Remote admin password",
+          "port": "Port",
+          "ssl": "Use HTTPS",
+          "verify_ssl": "Verify the certificate"
+        },
+        "data_description": {
+          "host": "The panel's address or hostname.",
+          "port": "The agent's remoteAdminPort. 2323 unless you changed it.",
+          "verify_ssl": "Turn this off only for a self-signed certificate on your own LAN."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-enter the password",
+        "description": "{host} refused the stored password. Re-provisioning a panel generates a new one; read it back from /etc/pikioskd/settings.json on the device.",
+        "data": {
+          "password": "Remote admin password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the agent. Check the address and port, and that pikioskd is running (systemctl status pikioskd).",
+      "invalid_auth": "The agent refused that password, or remote administration is switched off on the device.",
+      "unknown": "The agent answered something unexpected. Check its journal: journalctl -u pikioskd."
+    },
+    "abort": {
+      "already_configured": "This panel is already configured.",
+      "upgraded": "This panel's existing entry was upgraded in place to the agent transport. Its device, entities and history are unchanged."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Kiosk Pi",
+        "menu_options": {
+          "panel": "This panel's options",
+          "add_app": "Add a dashboard app",
+          "remove_app": "Remove a dashboard app"
+        }
+      },
+      "panel": {
+        "title": "This panel's options",
+        "data": {
+          "allow_control_boards": "Allow control boards on this panel",
+          "offline_expected": "This panel is expected to be offline"
+        },
+        "data_description": {
+          "allow_control_boards": "A wall panel usually has no keyboard, mouse or touch, so a control board on it is unreachable. Leave this off unless this panel can actually be operated.",
+          "offline_expected": "Stops polling and stops reporting a fault, without deleting the panel and its history."
+        }
+      },
+      "add_app": {
+        "title": "Add a dashboard app",
+        "description": "The dashboard apps every panel can be pointed at. This list is shared by all panels.",
+        "data": {
+          "key": "Name",
+          "url": "URL",
+          "surface": "Surface"
+        },
+        "data_description": {
+          "surface": "'control' boards are hidden from panels that do not allow them. Declared here rather than guessed from the URL."
+        }
+      },
+      "remove_app": {
+        "title": "Remove a dashboard app",
+        "data": {
+          "key": "Name"
+        }
+      }
+    },
+    "abort": {
+      "no_apps": "No dashboard apps are configured yet."
+    }
+  },
+  "issues": {
+    "agent_migration": {
+      "title": "{title} needs the kiosk agent installed",
+      "description": "Kiosk Pi 1.0.0 replaces the SSH transport with the pikioskd agent, which runs on the panel itself. Everything about this entry carried across except the password — the agent generates it on the device when you install it, so it did not exist until now.\n\n1. Run `sudo agent/install.sh` on the panel (from this repository) and note the password it prints.\n2. Home Assistant has already asked to reconfigure this panel. Answer that prompt with the password.\n\nDO NOT add the panel again from Add Integration, and do not delete this entry. This entry still holds the panel's identity, so adding it again is refused as already configured — and deleting it would take the panel's device, its entities and every recorded row behind them with it. Reconfiguring keeps all of it."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "agent": {
+        "name": "Agent"
+      },
+      "browser": {
+        "name": "Browser"
+      },
+      "kiosk_mode": {
+        "name": "Kiosk mode"
+      },
+      "screensaver_active": {
+        "name": "Screensaver active"
+      },
+      "throttled": {
+        "name": "Throttled"
+      },
+      "filesystem_read_only": {
+        "name": "Filesystem read-only"
+      }
+    },
+    "button": {
+      "load_start_url": {
+        "name": "Load start URL"
+      },
+      "restart_browser": {
+        "name": "Restart browser"
+      },
+      "clear_cache": {
+        "name": "Clear browser cache"
+      },
+      "clear_cookies": {
+        "name": "Clear cookies"
+      },
+      "to_foreground": {
+        "name": "Bring to foreground"
+      },
+      "restart_device": {
+        "name": "Restart device"
+      }
+    },
+    "image": {
+      "screenshot": {
+        "name": "Screenshot"
+      }
+    },
+    "notify": {
+      "overlay_message": {
+        "name": "Overlay message"
+      }
+    },
+    "number": {
+      "screen_brightness": {
+        "name": "Screen brightness"
+      },
+      "screensaver_brightness": {
+        "name": "Screensaver brightness"
+      },
+      "screen_off_timer": {
+        "name": "Screen off timer"
+      },
+      "screensaver_timer": {
+        "name": "Screensaver timer"
+      }
+    },
+    "select": {
+      "dashboard": {
+        "name": "Dashboard"
+      }
+    },
+    "sensor": {
+      "current_page": {
+        "name": "Current page"
+      },
+      "agent_version": {
+        "name": "Agent version"
+      },
+      "browser_version": {
+        "name": "Browser version"
+      },
+      "browser_restarts": {
+        "name": "Browser restarts"
+      },
+      "cpu_temperature": {
+        "name": "CPU temperature"
+      },
+      "free_memory": {
+        "name": "Free memory"
+      },
+      "memory_used": {
+        "name": "Memory used"
+      },
+      "free_storage": {
+        "name": "Free storage"
+      },
+      "wifi_signal": {
+        "name": "Wi-Fi signal"
+      },
+      "resolution": {
+        "name": "Resolution"
+      },
+      "ip_address": {
+        "name": "IP address"
+      },
+      "uptime": {
+        "name": "Uptime"
+      }
+    },
+    "switch": {
+      "screen": {
+        "name": "Screen"
+      },
+      "screensaver": {
+        "name": "Screensaver"
+      },
+      "kiosk_lock": {
+        "name": "Kiosk lock"
+      },
+      "maintenance_mode": {
+        "name": "Maintenance mode"
+      }
+    },
+    "text": {
+      "start_url": {
+        "name": "Start URL"
+      },
+      "error_url": {
+        "name": "Outage page URL"
+      }
+    }
+  },
+  "services": {
+    "load_url": {
+      "name": "Load URL",
+      "description": "Navigate a panel now, without changing what it comes back to after a restart. Use the Dashboard select or the Start URL text entity to change a panel permanently.",
+      "fields": {
+        "device_id": {
+          "name": "Panel",
+          "description": "The kiosk panel or panels to act on."
+        },
+        "url": {
+          "name": "URL",
+          "description": "The address to load."
+        }
+      }
+    },
+    "set_config": {
+      "name": "Set a setting",
+      "description": "Write one of the agent's own settings by name. For anything this integration has not grown an entity for.",
+      "fields": {
+        "device_id": {
+          "name": "Panel",
+          "description": "The kiosk panel or panels to act on."
+        },
+        "key": {
+          "name": "Key",
+          "description": "The agent's setting name, e.g. timeToScreensaverV2."
+        },
+        "value": {
+          "name": "Value",
+          "description": "The value. It is coerced to the setting's declared type and refused if it does not fit."
+        }
+      }
+    }
+  }
+}

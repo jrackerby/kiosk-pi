@@ -1,0 +1,10 @@
+# Test dependencies for the INTEGRATION, declared beside its suite.
+#
+# A list in the workflow is a second copy that goes stale on the next import
+# added, and its failure reads as a broken test rather than as a missing
+# declaration. The agent declares its own separately in agent/.
+#
+# pytest-homeassistant-custom-component pins the Home Assistant version the
+# suite runs against and pulls pytest, pytest-asyncio and the aiohttp mocker
+# with it.
+pytest-homeassistant-custom-component

@@ -1,0 +1,7 @@
+# Test dependencies, DECLARED BESIDE THE SUITE rather than listed in a workflow.
+#
+# A list in CI is a second copy that goes stale on the next import added, and
+# its failure reads as a broken test rather than as a missing declaration.
+# pikioskd itself has no runtime dependencies at all — test_stdlib_only.py
+# fails the build if that changes.
+pytest>=8.0

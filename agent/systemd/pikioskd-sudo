@@ -1,0 +1,7 @@
+# pikioskd reboots the host on rebootDevice and nothing else.
+#
+# ONE COMMAND, NOT `ALL`. A wall panel's agent needs exactly one privileged
+# verb; granting NOPASSWD: ALL to reach it hands a LAN-facing HTTP service on a
+# shared password full root, which is a different risk from the one being
+# solved. Install to /etc/sudoers.d/pikioskd with mode 0440.
+kiosk ALL=(root) NOPASSWD: /bin/systemctl reboot, /usr/bin/systemctl reboot

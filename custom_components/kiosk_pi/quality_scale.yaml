@@ -1,0 +1,242 @@
+# Gap list against the Home Assistant integration quality scale.
+#
+# THE RULE NAMES BELOW WERE READ FROM `ALL_RULES` IN home-assistant/core's
+# script/hassfest/quality_scale.py, on the day this file was written — not from
+# the docs page, which names the tiers and not the rules, and not from memory.
+# Re-read them before editing this file; the list moves.
+#
+# NOTHING VALIDATES THIS FILE FOR A CUSTOM COMPONENT. hassfest's
+# `validate_iqs_file` opens with `if not integration.core: return`, so this file
+# goes unread, while manifest.json's schema still ACCEPTS a `quality_scale`
+# key — a tier declared there is a self-claim with no gate behind it, green for
+# ever. That is exactly why this file is written honestly and why the two
+# `todo`s below are left as `todo` rather than talked into `done`.
+#
+# TARGET: SILVER. This is `integration_type: device`, `local_polling`, against
+# real hardware.
+
+rules:
+  # --- Bronze ---------------------------------------------------------------
+  action-setup:
+    status: done
+    comment: |
+      load_url and set_config are registered in async_setup, not in
+      async_setup_entry. Registering per entry would tear the services down
+      when the FIRST panel is removed, leaving the remaining panels with
+      automations that fail on a service that no longer exists.
+  appropriate-polling:
+    status: done
+    comment: |
+      30s, one HTTP round trip on the LAN. A panel's state changes when
+      somebody changes it or when its browser dies; faster buys nothing and
+      slower means a wall repointed by an automation reads stale on the
+      dashboard the operator is watching.
+  brands:
+    status: exempt
+    comment: |
+      home-assistant/brands accepts core integrations only. A custom component
+      cannot have a brand entry, so this rule cannot be satisfied from here.
+  common-modules:
+    status: done
+    comment: coordinator.py, entity.py, api.py.
+  config-flow:
+    status: done
+  config-flow-test-coverage:
+    status: done
+    comment: |
+      tests/test_config_flow.py covers the user flow, the duplicate-panel
+      abort, both refusal branches, DHCP discovery and both reauth outcomes —
+      and asserts that the setup probe uses the same channel, port and
+      credential the coordinator will use.
+  dependency-transparency:
+    status: done
+    comment: |
+      No requirements at all. The transport is aiohttp, which Home Assistant
+      already ships; the device-side agent is standard-library-only and is
+      installed from this repository rather than from PyPI.
+  docs-actions:
+    status: done
+    comment: README documents load_url and set_config, including why load_url
+      is transient.
+  docs-conditions:
+    status: exempt
+    comment: This integration provides no conditions.
+  docs-high-level-description:
+    status: done
+  docs-installation-instructions:
+    status: done
+    comment: README covers both halves — the agent on the panel, then the entry
+      in Home Assistant.
+  docs-removal-instructions:
+    status: done
+  docs-triggers:
+    status: exempt
+    comment: This integration provides no triggers.
+  entity-event-setup:
+    status: exempt
+    comment: |
+      Polling only. Nothing here subscribes to an external event source, so
+      there is no subscription to set up or tear down around the entity
+      lifecycle.
+  entity-unique-id:
+    status: done
+    comment: |
+      Keyed on the config entry id, not the hostname. The pre-1.0.0 version
+      keyed on the hostname, so a panel renamed on the host minted a second set
+      of entities beside the originals with the history stranded on the first.
+  has-entity-name:
+    status: done
+  runtime-data:
+    status: done
+  test-before-configure:
+    status: done
+    comment: |
+      The config flow builds the same client, over the same scheme, port and
+      credential the coordinator will use, and calls a command on it. It calls
+      `status` rather than `deviceInfo` so a correctly configured panel whose
+      browser happens to be restarting is not refused.
+  test-before-setup:
+    status: done
+    comment: async_config_entry_first_refresh; a 401 raises ConfigEntryAuthFailed
+      rather than retrying a credential that will still be wrong in 30 seconds.
+  unique-config-entry:
+    status: done
+    comment: Unique on the panel's own hostname, so a moved DHCP lease updates
+      the entry rather than adding the same wall twice.
+
+  # --- Silver ---------------------------------------------------------------
+  action-exceptions:
+    status: done
+    comment: |
+      ServiceValidationError for a target that is not a loaded panel — never a
+      silent skip, which would report success while three of four targets did
+      nothing — and HomeAssistantError carrying the agent's own message for a
+      device-side failure.
+  config-entry-unloading:
+    status: done
+  docs-configuration-parameters:
+    status: done
+  docs-installation-parameters:
+    status: done
+  entity-unavailable:
+    status: done
+    comment: |
+      The coordinator raises UpdateFailed and its entities go unavailable.
+      TWO DELIBERATE EXCEPTIONS, both recorded rather than silent:
+      binary_sensor.<panel>_agent stays available because a monitor that
+      disappears with its subject cannot report the subject down; and
+      everything reached through DevTools is additionally unavailable while the
+      browser is down, because a control that is present and cannot work
+      teaches an operator that a red toast is normal.
+  integration-owner:
+    status: done
+  log-when-unavailable:
+    status: done
+    comment: |
+      INFO once at the crossing and once on recovery, deduped on a stable
+      condition token rather than on the rendered message — a message carrying
+      the error text turns one condition into a new line on every poll. INFO
+      rather than WARNING because the split is on who acts: an unreachable
+      panel needs no edit from anybody, and the entity going unavailable is the
+      report.
+  parallel-updates:
+    status: done
+    comment: |
+      0 on the read-only platforms; 1 on every platform that writes. The agent
+      is a settings file behind an HTTP server on a Raspberry Pi, so two
+      concurrent writes are a lost update with no conflict marker, and two
+      concurrent browser commands race for one DevTools session.
+  reauthentication-flow:
+    status: done
+    comment: Re-provisioning a panel regenerates its password, so this is a
+      routine step rather than an incident.
+  test-coverage:
+    status: todo
+    comment: |
+      HONEST STATUS. tests/ covers setup, unload, the migration refusal, the
+      entity surface as a SET, availability semantics, the current-page dwell
+      in all three directions, the write path for each control platform, and
+      the board-filter policy. What it does NOT yet cover: the image platform's
+      fetch-and-invalidate behaviour, the notify overlay, the options flow's
+      three branches, and diagnostics redaction. Below the 95% the rule asks
+      for; raising it is jrackerby/kiosk-pi#10.
+
+  # --- Gold: reported where already met, so nobody re-derives it -------------
+  devices:
+    status: done
+  diagnostics:
+    status: done
+    comment: Both passwords redacted — the entry's and the agent's own copy in
+      the settings map. The SSID is not, deliberately: it is not a credential
+      and it is the most useful field for diagnosing a panel that roams.
+  discovery:
+    status: done
+    comment: |
+      DHCP on the hostname pattern. Discovery OFFERS a pre-filled form and
+      cannot complete on its own: the agent's password is generated on the
+      device by its installer, so a flow that completed unaided would have to
+      be using a shipped default — which would mean the fleet has one.
+  discovery-update-info:
+    status: done
+    comment: _abort_if_unique_id_configured updates the host on a moved lease.
+  docs-data-update:
+    status: todo
+  docs-examples:
+    status: todo
+  docs-known-limitations:
+    status: done
+    comment: README's "What this cannot do" section.
+  docs-supported-devices:
+    status: done
+  docs-supported-functions:
+    status: done
+  docs-troubleshooting:
+    status: done
+  docs-use-cases:
+    status: todo
+  dynamic-devices:
+    status: exempt
+    comment: One agent is one panel. There are no sub-devices to appear later.
+  entity-category:
+    status: done
+  entity-device-class:
+    status: done
+  entity-disabled-by-default:
+    status: todo
+    comment: |
+      Nothing is disabled by default yet. The diagnostic sensors are the
+      candidates, but on a fleet of wall panels they are the readings that
+      explain a browser that keeps dying, so hiding them by default would hide
+      the answer.
+  entity-translations:
+    status: done
+  exception-translations:
+    status: todo
+  icon-translations:
+    status: todo
+  reconfiguration-flow:
+    status: todo
+    comment: |
+      An address change is currently handled by DHCP discovery updating the
+      entry, or by removing and re-adding the panel. A port or scheme change
+      needs the latter.
+  repair-issues:
+    status: done
+    comment: The migration refusal raises one, with the two steps that resolve
+      it.
+  stale-devices:
+    status: exempt
+    comment: One entry is one device; removing the entry removes it.
+
+  # --- Platinum -------------------------------------------------------------
+  async-dependency:
+    status: done
+    comment: The client is aiohttp end to end; there is no executor call in the
+      integration.
+  inject-websession:
+    status: done
+    comment: |
+      async_get_clientsession, never a session of its own. A client that owned
+      its session would leak a connector on every config entry reload.
+  strict-typing:
+    status: todo

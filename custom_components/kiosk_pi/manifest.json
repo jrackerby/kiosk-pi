@@ -1,0 +1,21 @@
+{
+  "domain": "kiosk_pi",
+  "name": "Kiosk Pi",
+  "codeowners": [
+    "@jrackerby"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "dhcp": [
+    {
+      "hostname": "pi*kiosk*"
+    }
+  ],
+  "documentation": "https://github.com/jrackerby/kiosk-pi",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/jrackerby/kiosk-pi/issues",
+  "quality_scale": "bronze",
+  "requirements": [],
+  "version": "1.0.0"
+}
