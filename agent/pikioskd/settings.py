@@ -166,6 +166,12 @@ SPECS: dict[str, _Spec] = {
     "chromiumBinary": _Spec("string", "chromium", _as_str),
     "cageBinary": _Spec("string", "cage", _as_str),
     "chromiumFlags": _Spec("list", [], _as_str_list),
+    # These panels have no pointer device, and Chromium's Ozone/Wayland
+    # cursor path strands whatever cursor was drawn at launch. On by
+    # default because a wall board has no use for a pointer it cannot
+    # move; off exists for a bench host somebody is actually driving
+    # (jrackerby/kiosk-pi#9).
+    "hideCursor": _Spec("bool", True, _as_bool),
     # NOT under /home: the unit sets ProtectHome=read-only, and Chromium exits 21
     # on every launch when it cannot write its own profile. /var/lib/pikioskd is
     # the unit's StateDirectory, created and owned by systemd for this service.
@@ -186,7 +192,7 @@ SECRET_KEYS = frozenset(k for k, s in SPECS.items() if s.secret)
 # setter that touches one says so in its reply rather than letting the caller
 # conclude from a 200 that the wall has already moved.
 BROWSER_RESTART_KEYS = frozenset({
-    "cdpPort", "chromiumBinary", "cageBinary", "chromiumFlags",
+    "cdpPort", "chromiumBinary", "cageBinary", "chromiumFlags", "hideCursor",
     "chromiumProfileDir", "chromiumCacheDir", "xdgRuntimeDir", "kioskMode",
 })
 

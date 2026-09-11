@@ -6,6 +6,10 @@ these tests needs a browser, a compositor or a Pi.
 
 from __future__ import annotations
 
+import json
+import os
+import pathlib
+
 import pytest
 
 from pikioskd import device
@@ -76,6 +80,116 @@ def test_kiosk_mode_off_drops_the_kiosk_flag(settings):
 def test_kiosk_mode_on_keeps_it(settings):
     argv = BrowserSupervisor(settings).command("http://example.invalid/")
     assert "--kiosk" in argv
+
+
+# --- the cursor (jrackerby/kiosk-pi#9, #4) ------------------------------------
+
+def test_there_is_exactly_one_disable_features_flag():
+    """Chromium keeps ONE of a repeated flag and does not say which.
+
+    `--load-extension` needs a feature disabled to work at all from Chromium
+    137, and the base set already disabled one for the translate bar. Appending
+    a second `--disable-features` would have silently dropped whichever one
+    Chromium felt like — so the two are COMPOSED into one value, and this
+    asserts on the count rather than on the presence of either.
+    """
+    from pikioskd.browser import DISABLED_FEATURES
+
+    flags = [f for f in BASE_FLAGS if f.startswith("--disable-features=")]
+    assert len(flags) == 1
+
+    values = flags[0].split("=", 1)[1].split(",")
+    assert set(values) == set(DISABLED_FEATURES)
+    assert len(values) == len(set(values)), "a feature listed twice"
+
+
+def test_no_feature_is_disabled_on_a_guess():
+    """The branded-Chrome escape hatch is NOT carried here, deliberately.
+
+    Google-branded Chrome restricted `--load-extension` at 137 and removed it,
+    along with its `DisableLoadExtensionCommandLineSwitch` workaround, at 142.
+    Unbranded Chromium — what Raspberry Pi OS packages and what
+    `chromiumBinary` defaults to — keeps the switch, and the live fleet reports
+    152.0.7977.82 from that package. Carrying the workaround anyway would have
+    written a version gate that does not govern this fleet into the flag set,
+    which is the same class of defect as the cursor comment this replaced.
+    """
+    from pikioskd.browser import DISABLED_FEATURES
+
+    assert "DisableLoadExtensionCommandLineSwitch" not in DISABLED_FEATURES
+
+
+def test_the_cursor_extension_is_written_and_loaded(settings, tmp_path):
+    settings.set("chromiumProfileDir", str(tmp_path / "profile" / "chromium"))
+    supervisor = BrowserSupervisor(settings)
+
+    argv = supervisor.command("http://example.invalid/")
+
+    directory = supervisor.cursor_extension_dir()
+    assert f"--load-extension={directory}" in argv
+    assert os.path.isdir(directory)
+
+    manifest = json.loads(
+        (pathlib.Path(directory) / "manifest.json").read_text()
+    )
+    assert manifest["manifest_version"] == 3
+    assert manifest["content_scripts"][0]["css"] == ["hide-cursor.css"]
+    # document_start, or the arrow is painted before the rule lands.
+    assert manifest["content_scripts"][0]["run_at"] == "document_start"
+
+    css = (pathlib.Path(directory) / "hide-cursor.css").read_text()
+    assert "cursor: none !important" in css
+
+
+def test_the_extension_lives_outside_the_chromium_profile(settings, tmp_path):
+    """Chromium rewrites its profile directory as it pleases. An extension it
+    is being asked to load from inside one is a directory two writers own."""
+    profile = tmp_path / "profile" / "chromium"
+    settings.set("chromiumProfileDir", str(profile))
+    directory = pathlib.Path(BrowserSupervisor(settings).cursor_extension_dir())
+
+    assert profile not in directory.parents
+    assert directory != profile
+
+
+def test_hide_cursor_off_loads_nothing(settings, tmp_path):
+    """A bench host somebody is actually driving needs its pointer."""
+    settings.set("chromiumProfileDir", str(tmp_path / "profile" / "chromium"))
+    settings.set("hideCursor", False)
+
+    argv = BrowserSupervisor(settings).command("http://example.invalid/")
+    assert not [f for f in argv if f.startswith("--load-extension=")]
+
+
+def test_an_unwritable_state_dir_costs_the_cursor_not_the_wall(settings,
+                                                               tmp_path):
+    """A visible cursor is a blemish. A wall that will not start is an outage.
+
+    Asserted through `command()` rather than by calling the writer directly:
+    the question is whether the LAUNCH survives, and a writer that raises is
+    only a defect because of what it would do to the argv.
+    """
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a directory")
+    settings.set("chromiumProfileDir", str(blocker / "chromium"))
+
+    argv = BrowserSupervisor(settings).command("http://example.invalid/")
+
+    assert not [f for f in argv if f.startswith("--load-extension=")]
+    assert "--kiosk" in argv
+    assert argv[-1] == "http://example.invalid/"
+
+
+def test_an_operator_flag_can_still_override_disable_features(settings,
+                                                              tmp_path):
+    """The operator wins, and loses the extension with it — which is correct
+    and is the documented consequence of replacing the whole value."""
+    settings.set("chromiumProfileDir", str(tmp_path / "profile" / "chromium"))
+    settings.set("chromiumFlags", ["--disable-features=SomethingElse"])
+
+    argv = BrowserSupervisor(settings).command("http://example.invalid/")
+    features = [f for f in argv if f.startswith("--disable-features=")]
+    assert features == ["--disable-features=SomethingElse"]
 
 
 def test_base_flags_have_no_duplicate_names():
