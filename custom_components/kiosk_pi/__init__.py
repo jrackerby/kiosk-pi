@@ -162,10 +162,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # 3 RATHER THAN 2, TO REACH THE ENTRIES 3.2 ALREADY PASSED OVER.
     #
-    # The sequencing bug fixed alongside this landed three of this estate's
-    # four panels on 3.2 without the adoption ever running — the step was a
-    # no-op for them, and correcting the step could not reach them afterwards
-    # because they already carried its version. A migration step is only ever
+    # The sequencing bug fixed alongside this landed most existing panels on
+    # 3.2 without the adoption ever running — the step was a no-op for them,
+    # and correcting the step could not reach them afterwards because they
+    # already carried its version. A migration step is only ever
     # run once per entry, so a step that shipped broken cannot be repaired in
     # place: it has to be re-offered under a NEW number. The work is
     # idempotent (a row already re-keyed is simply not found), so entries that
@@ -224,7 +224,7 @@ def _adopt_ssh_era_entity_rows(
     same entity_id, same history, no `_2`, and nothing orphaned.
 
     Ids taken by ANOTHER integration are not touched and cannot be — on this
-    estate `sensor.<host>_ip_address` belongs to cyber_estate and
+    the existing `sensor.<host>_ip_address` belongs to cyber_estate and
     `sensor.<host>_uptime` to linux_monitor. Those `_2` suffixes are a
     cross-integration fact, not this migration's to fix.
     """

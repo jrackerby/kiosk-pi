@@ -1,19 +1,19 @@
 """Sensors: what the panel is showing, and the few host readings that explain it.
 
 WHAT IS DELIBERATELY ABSENT. apt state, kernel versions, pending updates, NIC
-inventory as entities — AND THE HOST'S IP ADDRESS AND UPTIME — ``linux_monitor``
-and ``cyber_estate`` own generic OS health for every host in this estate, and
-each of these panels already has an entry from both. A second copy here would
+inventory as entities — AND THE HOST'S IP ADDRESS AND UPTIME. Generic OS health
+belongs to a general host monitor across every machine you run; where one is
+installed, a panel already carries its entry beside this one. A second copy here would
 put two integrations on one device page reporting one fact from two transports,
 which is how a host grows two health sensors that disagree.
 
 THAT IS NOT A THEORY: 1.0.0 shipped ``ip_address`` and ``uptime`` anyway and
-every one of them landed as a ``_2`` beside the owner's — except on one panel,
-where kiosk_pi won the race and took the canonical ``sensor.<host>_ip_address``
-while ``cyber_estate``'s became the ``_2``. The registry never frees an id, so
+every one of them landed as a ``_2`` beside the existing owner's — except where
+kiosk_pi won the race and took the canonical ``sensor.<host>_ip_address``,
+leaving the real owner's as the ``_2``. The registry never frees an id, so
 the collision is permanent in whichever direction it happened to fall. Disabling
 the losers in the registry is undone by the next reinstall; not registering them
-is not (jrackerby/HA#467, jrackerby/kiosk-pi#6).
+is not (#6).
 
 What is here earns its place by answering a question about the PANEL. Memory and
 temperature explain a browser that keeps dying; the link readings explain a

@@ -11,9 +11,9 @@ in ``__init__.py``, which says so to the operator rather than silently producing
 an entry that cannot connect.
 
 WHAT LEFT, AND WHERE IT WENT. Generic OS health — apt state, kernel upgrades,
-dmesg, NIC inventory, config drift — is ``linux_monitor``'s across every host in
-the estate, kiosks included, and every kiosk here already has a
-``linux_monitor`` entry beside this one. Keeping a second copy meant two
+dmesg, NIC inventory, config drift — belongs to a general host monitor such as
+``linux_monitor``, across every host you run, kiosks included; a panel that has
+one already carries that entry beside this one. Keeping a second copy meant two
 integrations reporting one fact from two transports onto one device page, which
 is how a host ends up with two health sensors that disagree and an entity id
 carrying a ``_2`` suffix nobody can remove. ``update.py`` (apt install) and
@@ -84,7 +84,7 @@ EXTERNAL_APPS_STORE_VERSION = 1
 # Seeded ONCE into the Store on first read and never re-seeded — re-seeding an
 # empty list would resurrect an app somebody deliberately removed, which is
 # indistinguishable from the removal never having taken. Empty by default: a
-# board's address is estate inventory and does not belong in a public
+# board's address is deployment inventory and does not belong in a public
 # repository's source.
 DEFAULT_EXTERNAL_DASHBOARD_APPS: tuple[dict[str, object], ...] = ()
 

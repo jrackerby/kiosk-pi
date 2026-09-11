@@ -8,7 +8,7 @@ over. What it does NOT reproduce is Fully's type infidelity: Fully returns
 booleans as real JSON booleans but most integers as STRINGS, so
 ``timeToScreenOffV2`` reads ``'0'`` and a plain ``!= 0`` comparison calls every
 correctly-configured device drifted, forever. That behaviour is a bug being
-worked around estate-wide; reproducing it for compatibility would propagate the
+worked around fleet-wide; reproducing it for compatibility would propagate the
 workaround into a second fleet. Here a key declared ``int`` reads back an
 ``int``, always, and ``setStringSetting`` on an int key coerces or fails loudly
 rather than storing a string that reads correct and compares wrong.

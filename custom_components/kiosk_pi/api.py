@@ -1,8 +1,8 @@
 """The HTTP client for one ``pikioskd`` agent.
 
 IMPORTS NOTHING FROM ``homeassistant``, deliberately, so the transport can be
-exercised without a Home Assistant — the same reason the estate's resolver and
-policy modules do not. It takes an ``aiohttp`` session because Home Assistant
+exercised without a Home Assistant, which is what makes the transport testable
+by inspection. It takes an ``aiohttp`` session because Home Assistant
 supplies one; it does not create one, because a client that owns its own
 session leaks a connector per config entry reload.
 

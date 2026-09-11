@@ -428,7 +428,7 @@ def test_memory_and_storage_read_on_this_host():
 
 
 def test_the_assertions_above_can_fail():
-    """LAW §4: each is the mutation the test above is meant to catch."""
+    """Each is the mutation the test above is meant to catch."""
     with pytest.raises(AssertionError):
         assert merge_flags(("--disable-features=TranslateUI",),
                            ["--disable-features=A"]) == \

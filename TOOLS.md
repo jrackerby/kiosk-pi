@@ -6,8 +6,8 @@ plan on one, and edit it when it stops being true.
 
 A trap belongs to whichever repository holds the instrument it is about. This
 file covers the Pi panel agent and the two test harnesses that exercise it and
-the integration. Traps about Home Assistant's own instruments live in
-`jrackerby/HA`.
+the integration. Traps about Home Assistant's own instruments are not this
+repository's to record.
 
 ## `BaseHTTPRequestHandler` logging
 

@@ -4,7 +4,7 @@ THIS FILE EXISTS BECAUSE THE SHIPPED 1.0.0 UNIT WAS UNRUNNABLE AND EVERY OTHER
 TEST PASSED. ``ProtectHome=read-only`` made Chromium's ``--user-data-dir``
 unwritable, so the browser exited 21 within a second of every launch while the
 unit itself reported ``active`` and ``NRestarts=0`` — the failure mode this
-repository's TOOLS.md already warns about, arriving from the one direction
+repository's TOOLS.md already records, arriving from the one direction
 nobody had a check pointed at. Measured on the first panel, 2026-09-10.
 
 The check is a join between two files that must agree and had no reason to:
@@ -86,7 +86,7 @@ def test_the_join_can_fail():
     """Self-test: the assertion catches the exact regression that shipped.
 
     Without this, a check that never fails reads identically to one that
-    passes for a good reason (LAW §4).
+    passes for a good reason.
     """
     parser = _unit()
     roots = writable_roots(parser)

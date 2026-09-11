@@ -133,7 +133,7 @@ async def test_unreachable_host_is_cannot_connect(
 async def test_the_setup_probe_uses_the_channel_the_integration_will_use(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, no_app_probes
 ) -> None:
-    """§9: a check on a different channel certifies nothing, and not green.
+    """A check on a different channel certifies nothing, and not green.
 
     Asserted on the wire: the probe must reach the agent's own port with the
     password in the Authorization header — the same request the coordinator
