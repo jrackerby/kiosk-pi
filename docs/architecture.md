@@ -3,14 +3,14 @@
 What the pieces are, which way the data moves, and where each decision is
 actually enforced. The 0.7.0-era documents this replaces described the ssh and
 Glances transport, `kiosk.sh` drift detection and `sensor.<host>_kiosk_url`;
-**none of that survives 1.0.0** and they were retired from `jrackerby/HA`
-rather than updated, because a document describing a transport that no longer
+**none of that survives 1.0.0** and those documents were retired rather than
+updated, because a document describing a transport that no longer
 exists is worse than no document.
 
 This file describes structure and flow. It deliberately carries **no fleet
 inventory** — no hostnames, no addresses, no panel count. Which panels exist is
 live state, read off the registry; a list here would be wrong by the next
-reimage and would publish estate inventory from a public repository.
+reimage and would publish deployment inventory from a public repository.
 
 ---
 
@@ -130,7 +130,7 @@ refresh fails, because half a picture is the torn read again.
 **This coordinator raises `UpdateFailed`.** That is the quality scale's
 `entity-unavailable` rule and it governs here — this coordinator reads a
 DEVICE, which can be unreachable, so an entity that kept publishing its last
-value would be asserting something about a panel nobody can see. The estate's
+value would be asserting something about a panel nobody can see. The
 never-raise contract governs a coordinator reading other ENTITIES, which has no
 device to lose, and it is not contradicted by this.
 
@@ -200,9 +200,9 @@ zero` and `could not read` are different values at the source.
 
 **What is deliberately absent, and why it is absent here rather than merely
 unbuilt:** apt state, kernel versions, pending updates, an `update` entity, a
-reboot-host button, the host's IP address and its uptime. `linux_monitor` and
-`cyber_estate` own generic OS health for every host in this estate, and each
-panel already carries an entry from both. Shipping duplicates put every one of
+reboot-host button, the host's IP address and its uptime. Generic OS health
+belongs to a general host monitor across every machine you run; where one is
+installed, a panel already carries its entry beside this one. Shipping duplicates put every one of
 them in the registry as a `_2` beside the owner's, permanently, because the
 registry never frees an id. Chromium's version **does** belong here — that is
 the browser this integration exists for, not a system package — and so does

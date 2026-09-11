@@ -79,7 +79,7 @@ DEVICE_INFO: dict[str, Any] = {
     "wifi": {"ssid": "Example", "rssi": -43, "linkQuality": 63,
              "interface": "wlan0"},
     # RFC 7042 documentation-range MACs. NEVER a real one: a device address
-    # committed to a public repository is estate inventory, and this repo has
+    # committed to a public repository is deployment inventory, and this repo has
     # already had one round of that scrubbed out of it.
     "interfaces": [
         {"name": "wlan0", "mac": "00:00:5e:00:53:01", "ipv4": HOST,

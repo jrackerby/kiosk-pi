@@ -159,7 +159,7 @@ def test_redaction_hides_the_password_and_nothing_else(settings):
 
 
 def test_the_assertions_above_can_fail():
-    """LAW §4: an assertion set needs a self-test proving it CAN fail.
+    """An assertion set needs a self-test proving it CAN fail.
 
     Each of these is the mutation the corresponding test is meant to catch. If
     any of them stops raising, the test above it has stopped asserting.
@@ -213,7 +213,7 @@ def test_a_failed_save_rolls_back_every_key_in_the_write(settings, monkeypatch):
 
 
 def test_the_rollback_check_can_fail(settings, monkeypatch):
-    """LAW §4: prove the assertion catches the shape it is written for."""
+    """Prove the assertion catches the shape it is written for."""
     original = settings.get("startURL")
     settings._values["startURL"] = "http://not-on-disk.invalid/"  # noqa: SLF001
     with pytest.raises(AssertionError):

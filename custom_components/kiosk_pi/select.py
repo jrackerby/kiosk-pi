@@ -1,6 +1,6 @@
 """The dashboard picker: which external board this wall is pointed at.
 
-EXTERNAL WEB APPS ONLY. This estate's architecture is external, API-driven
+EXTERNAL WEB APPS ONLY. The architecture here is external, API-driven
 dashboards rather than native Lovelace YAML boards, and the Lovelace board
 fleet this picker's ancestor enumerated is decommissioned. The previous version
 walked every Lovelace view in the instance, classified each one by transcribing

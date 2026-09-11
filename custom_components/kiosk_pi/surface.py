@@ -46,7 +46,7 @@ def allowed_apps(apps: list[dict[str, Any]], current: str | None,
                  allow_control: bool) -> list[dict[str, Any]]:
     """The single accessor for what this wall may be pointed at.
 
-    LAW: a config key read by two code paths goes through one accessor. Both
+    A config key read by two code paths goes through one accessor. Both
     the select's ``options`` and its ``async_select_option`` call this — a
     guard on the option list alone would leave every other board reachable
     from more-info, an automation or voice, which is exactly what putting the

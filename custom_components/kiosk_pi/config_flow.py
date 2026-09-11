@@ -255,7 +255,7 @@ class KioskPiConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class KioskPiOptionsFlow(OptionsFlow):
-    """Per-panel options, plus the estate-wide list of dashboard apps."""
+    """Per-panel options, plus the shared list of dashboard apps."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

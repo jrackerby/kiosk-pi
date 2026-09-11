@@ -492,10 +492,10 @@ class BrowserSupervisor:
                       code: str, panel: str) -> str:
         """The outage page's address, carrying what failed.
 
-        The query contract is the one the estate's existing ``outage.html``
-        already reads — ``panel``, ``back``, ``error``, ``url`` — so a wall
-        driven by this agent lands on the same notice, saying the same thing,
-        as the tablets driven by Fully. Reproducing a working contract costs
+        The query contract is the one Fully Kiosk's own outage pages already
+        read — ``panel``, ``back``, ``error``, ``url`` — so a wall driven by
+        this agent lands on the same notice, saying the same thing, as a
+        tablet driven by Fully. Reproducing a working contract costs
         nothing; inventing a second one costs every consumer of the first.
 
         EXISTING QUERY PARAMETERS ON THE TEMPLATE ARE PRESERVED. An operator who

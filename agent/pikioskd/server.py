@@ -3,7 +3,7 @@
 SHAPE, DELIBERATELY COPIED: ``GET /?cmd=<name>&password=<pw>&...`` answering
 JSON with a ``status`` of ``OK`` or ``Error``. An operator who knows Fully's
 :2323 surface can drive this one from a browser address bar on the first day,
-and every existing note, bookmark and curl one-liner in the estate keeps its
+and an existing note, bookmark or curl one-liner written for Fully keeps its
 shape. The commands are named the same where they mean the same thing, and
 deliberately NOT named the same where they do not — there is no
 ``getCamshot`` here answering something that is not a camera.

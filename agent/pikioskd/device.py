@@ -2,7 +2,7 @@
 
 WHAT IS DELIBERATELY NOT HERE: apt state, kernel upgrade status, dmesg counts,
 unattended-upgrade configuration. Generic OS health belongs to ``linux_monitor``
-across every host in the estate, kiosks included, and duplicating it here would
+across every host you run, kiosks included, and duplicating it here would
 put two integrations on one device page reporting the same fact from two
 transports — which is how a host ends up with two health sensors that disagree
 and a second entity id carrying a ``_2`` suffix nobody can remove.

@@ -6,7 +6,7 @@ Re-seeding on an empty list would silently resurrect an app somebody removed,
 which is indistinguishable from the removal never having taken.
 
 THE SHIPPED DEFAULT IS EMPTY, and that is deliberate. A board's address is
-estate inventory: a real one committed here would be wrong for every other
+deployment inventory: a real one committed here would be wrong for every other
 installation and would publish a private hostname from a public repository. The
 list is built by the operator through the options flow.
 

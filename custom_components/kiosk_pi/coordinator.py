@@ -21,7 +21,7 @@ THIS COORDINATOR RAISES ``UpdateFailed`` AND ITS ENTITIES GO UNAVAILABLE. That
 is the quality scale's ``entity-unavailable`` rule and it governs here: this is
 a coordinator reading a DEVICE, which can be unreachable, so an entity that
 kept publishing its last value would be asserting something about a panel
-nobody can see. The estate's never-raise contract applies to a coordinator
+nobody can see. The never-raise contract applies to a coordinator
 reading other entities, which has no device to lose. ONE entity opts out —
 ``binary_sensor.<panel>_agent`` overrides ``available`` and stays up — because
 a monitor that disappears with its subject cannot report the subject down.

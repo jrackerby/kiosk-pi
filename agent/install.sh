@@ -19,8 +19,8 @@
 #     kiosk` and nothing has been destroyed to make that harder.
 #   - It does not reboot. A wall reboots when an operator decides it does.
 #   - IT DOES NOT ARM unattended-upgrades, AND THAT IS A RULING, NOT AN
-#     OMISSION (jrackerby/kiosk-pi#10). The fleet standard this inherited from
-#     jrackerby/HA#58 had the provisioning script write four artefacts —
+#     OMISSION (#10). The provisioning standard this inherited wrote four
+#     artefacts —
 #     `unattended-upgrades` installed, `20auto-upgrades`, `51kiosk-unattended`
 #     and an `apt-daily-upgrade.timer` drop-in — and a drift sensor to catch
 #     their reversion. Patching is now driven FROM Home Assistant by

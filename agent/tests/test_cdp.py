@@ -149,7 +149,7 @@ def test_truncated_stream_raises():
 
 
 def test_the_assertions_above_can_fail():
-    """LAW §4: prove the checks are capable of failing."""
+    """Prove the checks are capable of failing."""
     with pytest.raises(AssertionError):
         assert server_frame(b"x")[1] & 0x80  # a server frame must NOT be masked
     with pytest.raises(AssertionError):

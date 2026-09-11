@@ -3,7 +3,7 @@
 DELIBERATELY NOT A MOCKED HANDLER. The properties that matter here — that a bad
 password is 401 and not 200-with-an-error-body, that an unknown command is 404,
 that the password never reaches the log — are properties of the wire, and a test
-that calls the dispatcher directly asserts none of them. §9's channel rule: a
+that calls the dispatcher directly asserts none of them. The channel rule: a
 check that exercises a different channel than the one that will be used
 certifies nothing.
 
@@ -292,7 +292,7 @@ def test_device_info_answers_with_the_wall_down(server):
 
 
 def test_the_assertions_above_can_fail(server):
-    """LAW §4."""
+    """An assertion set needs a self-test proving it CAN fail."""
     with pytest.raises(AssertionError):
         assert call(server, cmd="status")[0] == 200          # unauthenticated
     with pytest.raises(AssertionError):
