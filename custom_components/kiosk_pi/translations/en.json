@@ -103,6 +103,9 @@
       "throttled": {
         "name": "Throttled"
       },
+      "cursor_hidden": {
+        "name": "Cursor hidden"
+      },
       "filesystem_read_only": {
         "name": "Filesystem read-only"
       }

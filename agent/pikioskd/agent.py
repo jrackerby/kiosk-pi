@@ -356,6 +356,11 @@ class KioskAgent:
         screen = self.display.state()
         running = self.browser.is_running()
         current_url = self.browser.current_url() if running else None
+        # One extra CDP round trip on the poll, and it buys the only
+        # cursor reading that exists off-device (browser.cursor_style).
+        # Skipped entirely when the browser is down, where it would just be a
+        # guaranteed timeout on every poll of a panel already known to be dark.
+        cursor_style = self.browser.cursor_style() if running else None
         with self._lock:
             overlay = self._overlay_text
             screensaver = self._screensaver_active
@@ -372,6 +377,8 @@ class KioskAgent:
                 str(self.settings.get("chromiumBinary"))
             ),
             "currentURL": current_url,
+            "cursorStyle": cursor_style,
+            "hideCursor": bool(self.settings.get("hideCursor")),
             "startURL": str(self.settings.get("startURL")),
             "screenOn": screen["on"],
             "screenBrightness": int(self.settings.get("screenBrightness")),

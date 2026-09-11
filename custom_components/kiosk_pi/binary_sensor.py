@@ -49,6 +49,36 @@ def _read_only_root(coordinator: KioskPiCoordinator) -> bool | None:
     return None if mode is None else mode != "rw"
 
 
+def _cursor_hidden(coordinator: KioskPiCoordinator) -> bool | None:
+    """Did the hide-cursor rule actually reach the live document.
+
+    THE ONLY CURSOR READING THAT EXISTS OFF-DEVICE, and it is worth knowing
+    exactly what it does and does not settle. `image.<panel>_screenshot` is a
+    `Page.captureScreenshot`, taken out of Chromium's RENDERER compositor,
+    while the stranded cursor is a `wl_pointer` surface Chromium hands to
+    cage — so a screenshot shows no cursor whether or not one is on the glass,
+    and a sweep of them once reported four walls clean with one of them stuck
+    (jrackerby/kiosk-pi#9).
+
+    UNAVAILABLE WHEN THE FEATURE IS OFF, rather than `off`. With `hideCursor`
+    disabled a pointer is the CORRECT state for a bench host somebody is
+    driving, and publishing that as a problem teaches an operator to ignore
+    this entity on the hosts where it matters.
+
+    ON means the extension loaded and its rule applied. It does NOT mean the
+    glass is clean: a Chromium that already committed a cursor surface and
+    never receives another pointer-enter can keep drawing it. That is the
+    whole value — ON with a cursor still on the wall is the compositor-surface
+    fault, OFF is a fix that never arrived, and before this the two were
+    indistinguishable without standing in front of the panel.
+    """
+    data = coordinator.data or {}
+    if not data.get("hideCursor"):
+        return None
+    style = data.get("cursorStyle")
+    return None if style is None else style == "none"
+
+
 SENSORS: tuple[KioskPiBinarySensorDescription, ...] = (
     KioskPiBinarySensorDescription(
         key="browser",
@@ -83,6 +113,15 @@ SENSORS: tuple[KioskPiBinarySensorDescription, ...] = (
     # not move, every other reading keeps answering, and the wall keeps
     # painting a stale page — this is the cheap signal that separates that from
     # a healthy panel.
+    # NOT A SCREENSHOT QUESTION, which is why it is an entity. See
+    # _cursor_hidden: the capture and the cursor live in different
+    # compositors and never meet.
+    KioskPiBinarySensorDescription(
+        key="cursor_hidden",
+        translation_key="cursor_hidden",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_cursor_hidden,
+    ),
     KioskPiBinarySensorDescription(
         key="filesystem_read_only",
         translation_key="filesystem_read_only",

@@ -370,9 +370,18 @@ service exists to do, reported by nothing.
 
 Stated so the next reader does not go looking:
 
-- **Whether the cursor is hidden on a given wall.** A CDP screenshot never
-  contains the compositor cursor, so `image.<panel>_screenshot` cannot answer
-  it. That needs `grim -c` on the host, or eyes on the glass.
+- **Whether the cursor is actually on the glass.** Half of this is now
+  readable and half is not, and the split is the useful part.
+  `image.<panel>_screenshot` answers neither half: it is a
+  `Page.captureScreenshot`, taken out of Chromium's **renderer** compositor,
+  while the stranded cursor is a `wl_pointer` surface handed to **cage** — the
+  two never meet, so the capture shows no cursor whether or not one is there.
+  `binary_sensor.<panel>_cursor_hidden` answers whether the hide-cursor rule
+  reached the live document, which is necessary and not sufficient: **ON** with
+  a cursor still on the wall is the compositor-surface fault, **OFF** is a fix
+  that never arrived, and **unavailable** is either a failed read or
+  `hideCursor` deliberately off. Only `grim -c` on the host, or eyes on the
+  glass, closes the last step.
 - **Which board a panel is *supposed* to show.** This repository publishes what
   it IS showing — `sensor.<panel>_current_page`, read from the browser through
   CDP — and `text.<panel>_start_url`, which is what it will show after a

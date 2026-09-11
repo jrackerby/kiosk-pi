@@ -397,6 +397,46 @@ class BrowserSupervisor:
             _LOGGER.debug("current_url unavailable: %s", err)
             return None
 
+    def cursor_style(self) -> str | None:
+        """The cursor the live document has actually resolved to.
+
+        THE ONE THING ABOUT THE CURSOR THAT IS READABLE FROM HOME ASSISTANT,
+        and the reason it exists: a CDP screenshot is
+        ``Page.captureScreenshot``, which renders the page out of Chromium's
+        RENDERER compositor, while the stranded cursor is a ``wl_pointer``
+        cursor surface Chromium hands to cage. The two never meet, so
+        ``image.<panel>_screenshot`` is guaranteed to show no cursor whether or
+        not one is on the glass — which is exactly how a screenshot sweep
+        reported four walls clean while one of them was stuck
+        (jrackerby/kiosk-pi#9).
+
+        NECESSARY, NOT SUFFICIENT, AND THAT IS THE POINT. `none` proves the
+        hide-cursor extension loaded and its rule applied; it does NOT prove
+        the glass is clean, because a Chromium that already committed a cursor
+        surface and never receives another pointer-enter can keep drawing it
+        regardless. That is precisely the discriminator the 0.x fix never had:
+        a wall reading `none` with a cursor still on it is the compositor-
+        surface fault, and a wall reading `auto` is a fix that never arrived.
+        Distinguishing those two currently costs a trip to the wall.
+
+        Read off ``documentElement`` rather than ``body``: an interstitial and
+        a board that has not painted yet both have a documentElement, and
+        ``body`` is null on the former.
+        """
+        if not self.is_running():
+            return None
+        try:
+            value = self.cdp().evaluate(
+                "getComputedStyle(document.documentElement).cursor"
+            )
+        except CDPError as err:
+            _LOGGER.debug("cursor_style unavailable: %s", err)
+            return None
+        # A non-string is a page that answered something unusable. Report
+        # UNKNOWN rather than coercing, or `None` becomes the string "None"
+        # and reads as a cursor nobody can look up.
+        return value if isinstance(value, str) and value else None
+
     def navigate(self, url: str) -> None:
         # Remembered as the LAST ADDRESS ASKED FOR, so an interstitial that
         # hides the attempted url from both the document and the target list

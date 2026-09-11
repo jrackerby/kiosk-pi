@@ -63,6 +63,8 @@ DEVICE_INFO: dict[str, Any] = {
     "kioskMode": True,
     "maintenanceMode": False,
     "overlayMessage": "",
+    "hideCursor": True,
+    "cursorStyle": "none",
     "idleSeconds": 12.0,
     "uptimeSeconds": 3600.0,
     "cpuTemperatureC": 52.1,
