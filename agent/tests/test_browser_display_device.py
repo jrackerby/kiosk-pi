@@ -14,6 +14,7 @@ import pytest
 
 from pikioskd import device
 from pikioskd.browser import BASE_FLAGS, BrowserSupervisor, merge_flags
+from pikioskd.cdp import CDPError
 from pikioskd.display import Display
 from pikioskd.settings import Settings
 
@@ -190,6 +191,74 @@ def test_an_operator_flag_can_still_override_disable_features(settings,
     argv = BrowserSupervisor(settings).command("http://example.invalid/")
     features = [f for f in argv if f.startswith("--disable-features=")]
     assert features == ["--disable-features=SomethingElse"]
+
+
+def test_cursor_style_reads_the_live_document(settings, monkeypatch):
+    """Read off documentElement, not body.
+
+    An interstitial and a board that has not painted yet both have a
+    documentElement; `body` is null on the former, and a reader that asks for
+    it gets a TypeError out of the page rather than a cursor.
+    """
+    supervisor = BrowserSupervisor(settings)
+    monkeypatch.setattr(supervisor, "is_running", lambda: True)
+    seen = {}
+
+    class FakeCDP:
+        def evaluate(self, expression):
+            seen["expr"] = expression
+            return "none"
+
+    monkeypatch.setattr(supervisor, "cdp", lambda: FakeCDP())
+
+    assert supervisor.cursor_style() == "none"
+    assert "documentElement" in seen["expr"]
+    assert "body" not in seen["expr"]
+
+
+def test_cursor_style_is_none_when_the_browser_is_down(settings, monkeypatch):
+    """Not a timeout on every poll of a panel already known to be dark."""
+    supervisor = BrowserSupervisor(settings)
+    monkeypatch.setattr(supervisor, "is_running", lambda: False)
+
+    def explode():
+        raise AssertionError("cdp() must not be reached with the browser down")
+
+    monkeypatch.setattr(supervisor, "cdp", explode)
+    assert supervisor.cursor_style() is None
+
+
+def test_a_cdp_failure_is_unknown_not_a_visible_cursor(settings, monkeypatch):
+    """`could not read` and `a cursor is showing` are different values.
+
+    Coercing a failed read to a truthy style would publish a panel as having a
+    visible cursor on the strength of not having looked.
+    """
+    supervisor = BrowserSupervisor(settings)
+    monkeypatch.setattr(supervisor, "is_running", lambda: True)
+
+    class DeadCDP:
+        def evaluate(self, expression):
+            raise CDPError("browser hung up")
+
+    monkeypatch.setattr(supervisor, "cdp", lambda: DeadCDP())
+    assert supervisor.cursor_style() is None
+
+
+@pytest.mark.parametrize("answer", [None, 42, "", {"cursor": "none"}])
+def test_an_unusable_answer_is_unknown_never_stringified(settings, monkeypatch,
+                                                         answer):
+    """`None` stringified is the word "None", which reads as a real cursor
+    value nobody can look up."""
+    supervisor = BrowserSupervisor(settings)
+    monkeypatch.setattr(supervisor, "is_running", lambda: True)
+
+    class OddCDP:
+        def evaluate(self, expression):
+            return answer
+
+    monkeypatch.setattr(supervisor, "cdp", lambda: OddCDP())
+    assert supervisor.cursor_style() is None
 
 
 def test_base_flags_have_no_duplicate_names():

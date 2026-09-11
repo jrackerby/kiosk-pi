@@ -75,6 +75,86 @@ async def test_readings_come_off_the_panel(
         "http://boards.invalid/alert-monitor/"
 
 
+# --- the cursor (jrackerby/kiosk-pi#9) ---------------------------------------
+
+async def test_the_cursor_reading_is_on_when_the_rule_applied(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """THE ONLY CURSOR READING THAT EXISTS OFF-DEVICE.
+
+    `image.<panel>_screenshot` is a `Page.captureScreenshot`, taken out of
+    Chromium's renderer compositor, while the stranded cursor is a wl_pointer
+    surface handed to cage — so a screenshot shows no cursor whether or not one
+    is on the glass. This entity is what a dashboard can actually read.
+    """
+    mock_agent(aioclient_mock)
+    await setup(hass, config_entry)
+    assert hass.states.get("binary_sensor.office_wall_cursor_hidden").state \
+        == STATE_ON
+
+
+async def test_a_visible_cursor_reads_off_not_unavailable(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """A panel whose extension never loaded. `auto` is a real answer, and it is
+    the one that says the fix did not arrive on this wall."""
+    info = {**DEVICE_INFO, "cursorStyle": "auto"}
+    mock_agent(aioclient_mock, device_info=info)
+    await setup(hass, config_entry)
+    assert hass.states.get("binary_sensor.office_wall_cursor_hidden").state \
+        == STATE_OFF
+
+
+async def test_the_cursor_reading_is_unavailable_when_the_feature_is_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """NOT `off`. With hideCursor disabled a pointer is the CORRECT state for a
+    bench host somebody is driving, and publishing it as a problem teaches an
+    operator to ignore this entity on the hosts where it matters."""
+    info = {**DEVICE_INFO, "hideCursor": False, "cursorStyle": "auto"}
+    mock_agent(aioclient_mock, device_info=info)
+    await setup(hass, config_entry)
+    assert hass.states.get("binary_sensor.office_wall_cursor_hidden").state \
+        == STATE_UNAVAILABLE
+
+
+async def test_an_unreadable_cursor_is_unavailable_not_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """`could not read` is not `a cursor is showing`.
+
+    Mapping a failed CDP read to False would publish a wall as faulty on the
+    strength of not having looked — and on a panel whose browser is down, that
+    is every poll.
+    """
+    info = {**DEVICE_INFO, "cursorStyle": None}
+    mock_agent(aioclient_mock, device_info=info)
+    await setup(hass, config_entry)
+    assert hass.states.get("binary_sensor.office_wall_cursor_hidden").state \
+        == STATE_UNAVAILABLE
+
+
+async def test_the_raw_cursor_style_reaches_diagnostics(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """The binary sensor answers "did the rule apply". The raw value answers
+    "what did the page actually resolve to", which is what somebody debugging
+    a wall needs, and it is not a credential."""
+    from custom_components.kiosk_pi.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    mock_agent(aioclient_mock)
+    await setup(hass, config_entry)
+    dump = await async_get_config_entry_diagnostics(hass, config_entry)
+    assert dump["device_info"]["cursorStyle"] == "none"
+
+
 async def test_the_monitor_sensor_joins_make_and_model(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
     no_app_probes,

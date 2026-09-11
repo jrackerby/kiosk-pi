@@ -193,9 +193,17 @@ the integration. Traps about Home Assistant's own instruments live in
   is, for ever. `cage` has no cursor-hide option and there is no Chromium flag
   for it. `cursor: none` FROM INSIDE THE PAGE is what makes Chromium commit a
   null cursor surface, which is why the fix is an extension and not a switch.
-  A CDP screenshot never contains the compositor cursor, so
-  `image.<host>_screenshot` cannot answer whether it worked — that needs
-  `grim -c` on the host or eyes on the glass.
+  A CDP screenshot never contains the compositor cursor — it is
+  `Page.captureScreenshot`, taken out of Chromium's RENDERER compositor, while
+  the cursor is a surface handed to cage, so `image.<host>_screenshot` shows no
+  cursor whether or not one is on the glass. A sweep of them once reported four
+  walls clean with one of them stuck. What IS readable off-device is whether
+  the hide-cursor rule reached the live document
+  (`binary_sensor.<host>_cursor_hidden`, from
+  `getComputedStyle(document.documentElement).cursor` over CDP). Necessary, not
+  sufficient: ON with a cursor still on the wall is the compositor-surface
+  fault, OFF is a fix that never arrived. Only `grim -c` on the host or eyes on
+  the glass closes the last step.
 - **`--load-extension` IS A BRANDED-CHROME QUESTION, NOT A VERSION QUESTION,
   AND THE VERSION NUMBER IS THE MISLEADING HALF.** Google-BRANDED Chrome
   restricted the switch at 137 and removed it — together with its

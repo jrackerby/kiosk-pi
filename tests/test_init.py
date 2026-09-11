@@ -215,6 +215,7 @@ async def test_the_entity_surface(
         "binary_sensor.office_wall_kiosk_mode",
         "binary_sensor.office_wall_screensaver_active",
         "binary_sensor.office_wall_throttled",
+        "binary_sensor.office_wall_cursor_hidden",
         "binary_sensor.office_wall_filesystem_read_only",
         "button.office_wall_load_start_url",
         "button.office_wall_restart_browser",
