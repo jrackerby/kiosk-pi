@@ -31,11 +31,7 @@ rules:
       somebody changes it or when its browser dies; faster buys nothing and
       slower means a wall repointed by an automation reads stale on the
       dashboard the operator is watching.
-  brands:
-    status: exempt
-    comment: |
-      home-assistant/brands accepts core integrations only. A custom component
-      cannot have a brand entry, so this rule cannot be satisfied from here.
+  brands: done  # brand/ served by core's own BrandsIntegrationView; HACS reads brand/icon.png
   common-modules:
     status: done
     comment: coordinator.py, entity.py, api.py.

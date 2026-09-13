@@ -1,3 +1,14 @@
+<p align="center">
+  <picture>
+    <!-- The wordmark is dark grey and vanishes on a dark ground, and HACS
+         renders this README inside Home Assistant's frontend, which is dark
+         by default; a renderer that drops <source> lands on the <img>, so the
+         dark-safe variant is the img and the light one the opt-in source. -->
+    <source media="(prefers-color-scheme: light)" srcset="custom_components/kiosk_pi/brand/logo.png">
+    <img src="custom_components/kiosk_pi/brand/dark_logo.png" alt="Kiosk Pi" width="420">
+  </picture>
+</p>
+
 # Kiosk Pi
 
 A kiosk browser for Raspberry Pi wall panels, and the Home Assistant
