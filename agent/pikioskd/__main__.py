@@ -14,6 +14,7 @@ import sys
 import threading
 from typing import Any
 
+from . import sdnotify
 from .agent import KioskAgent
 from .server import build_server
 from .settings import DEFAULT_SETTINGS_PATH, Settings
@@ -91,15 +92,43 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
 
-    server.serve_in_thread()
+    http_thread = server.serve_in_thread()
+    # READY ONLY ONCE THE API IS ACTUALLY SERVING. Under Type=notify systemd
+    # holds `systemctl start` (and the installer behind it) until this arrives,
+    # so a start that returns is a start whose loopback probe will answer.
+    sdnotify.ready()
+    interval = sdnotify.watchdog_interval()
+    if interval:
+        _LOGGER.info("systemd watchdog armed: fed once a second while both "
+                     "threads are healthy, killed after %.0fs of silence",
+                     interval)
     try:
         while not stopping.wait(1.0):
-            pass
+            if interval and _healthy(agent, http_thread, args.no_browser):
+                sdnotify.watchdog_ping()
     finally:
+        sdnotify.stopping()
         server.shutdown()
         server.server_close()
         agent.shutdown()
     return 0
+
+
+def _healthy(agent: KioskAgent, http_thread: threading.Thread,
+             no_browser: bool) -> bool:
+    """Should systemd's watchdog be fed this second.
+
+    THE PING IS A CLAIM AND IT IS ONLY MADE WHEN BOTH THREADS CAN BACK IT.
+    Feeding the watchdog unconditionally from this loop would certify a
+    process whose HTTP thread has died and whose supervision loop is wedged
+    in a subprocess call — the exact two states a watchdog is for. Without a
+    browser there is no supervision loop to vouch for, so only the API counts.
+    """
+    if not http_thread.is_alive():
+        return False
+    if no_browser:
+        return True
+    return agent.loop_healthy()
 
 
 if __name__ == "__main__":

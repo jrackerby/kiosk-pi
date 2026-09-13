@@ -13,7 +13,18 @@ After=network-online.target systemd-user-sessions.service
 Wants=network-online.target
 
 [Service]
-Type=simple
+# NOTIFY, NOT SIMPLE. Under Type=simple systemd knows one thing about this
+# process: whether it exited. A supervision loop deadlocked, an HTTP thread
+# wedged, a tick hung in a subprocess — each reads `active (running)` for
+# ever, which is the exact failure this agent accuses a bare Restart=always
+# of hiding about the browser. The agent sends READY=1 once the API is bound
+# (so `systemctl start`, and install.sh behind it, return to a serving agent)
+# and WATCHDOG=1 once a second while BOTH its threads are provably alive;
+# silence for WatchdogSec gets it killed and restarted. The agent's own
+# stale threshold is six ticks (30s), so 90s is three misses, never one.
+Type=notify
+NotifyAccess=main
+WatchdogSec=90
 User=kiosk
 Group=kiosk
 # The compositor needs a seat and the DRM/input devices. These are the groups a
@@ -36,14 +47,36 @@ RuntimeDirectoryMode=0700
 ExecStart=/usr/bin/python3 -m pikioskd --settings /etc/pikioskd/settings.json
 WorkingDirectory=/opt/pikioskd
 
-# Restart=always with NO backoff of its own. The agent already backs its own
-# browser restarts off exponentially and publishes the count; a systemd-level
-# retry storm on top of that would hide the agent's own signal and burn the SD
-# card. StartLimitIntervalSec=0 keeps systemd from giving up permanently on a
-# panel that had a bad week, which would leave the wall dark until somebody
-# noticed.
+# Restart=always, backed off, never given up on. The BROWSER's restarts are
+# the agent's to back off and count; these directives govern the AGENT, and
+# an agent that cannot start (a bad upgrade, an import error) under a flat
+# RestartSec=5 relaunches 17,000 times a day into the journal of an SD card.
+# RestartSteps/RestartMaxDelaySec (systemd >= 254) grow the delay from 5s to
+# 300s over six failures and reset it once a start holds. StartLimitIntervalSec=0
+# above keeps systemd from giving up permanently on a panel that had a bad
+# week, which would leave the wall dark until somebody noticed.
 Restart=always
 RestartSec=5
+RestartSteps=6
+RestartMaxDelaySec=300
+# A stop is ordered: SIGTERM to the agent alone, which tears the browser's
+# process group down itself (browser._terminate) before exiting; anything
+# still standing after TimeoutStopSec is killed. Under the default
+# KillMode=control-group the agent, cage and Chromium all get SIGTERM at once
+# and the agent finds a browser already dying under it.
+KillMode=mixed
+TimeoutStopSec=30
+
+# OOM. The default OOMPolicy=stop means a kernel OOM-kill of ANY process in
+# this cgroup — a Chromium renderer on a 1GB Pi 3B — stops the whole service,
+# agent included, and the API vanishes mid-poll. `continue` leaves the agent
+# standing to relaunch the browser, which is the design. OOMScoreAdjust puts
+# the agent behind the browser in the kernel's ordering; the agent raises the
+# browser's own score back to 0 at launch (browser._prefer_browser_for_oom),
+# since a child inherits the parent's and an unprivileged process may only
+# raise it.
+OOMPolicy=continue
+OOMScoreAdjust=-500
 
 # The agent reboots the host and writes /etc/pikioskd, so it is not sandboxed
 # to nothing — but it has no business writing anywhere else.

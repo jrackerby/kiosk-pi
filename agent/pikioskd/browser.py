@@ -15,6 +15,25 @@ does not publish it hides its own most important finding. The backoff exists so
 a panel that cannot start does not spend its SD card's remaining write cycles
 finding that out.
 
+EVERY EXIT IS CLASSIFIED, AND ONLY A CRASH IS A CRASH. Measured on four panels
+over 48 hours: every browser exit was code 0 at the same second on every host —
+a fleet-wide commanded restart after a dashboard deploy — and every one of them
+moved the "crash" counter, so the reading the README calls the signal could
+not tell an operator's button from a dying GPU. An exit the supervisor asked
+for is ``commanded``; one the liveness watchdog forced is ``watchdog``; every
+other exit is a ``crash``. The total is still published for continuity, and
+the three parts are published beside it.
+
+PROCESS EXIT IS NOT THE ONLY WAY A WALL GOES DARK. A Chromium wedged on the
+GPU keeps its pid and paints nothing, and ``cage`` started against no output
+runs for ever with DevTools never opened. The liveness watchdog restarts a
+browser that has answered no DevTools request for ``browserHangSeconds`` —
+GATED ON THE KERNEL REPORTING A CONNECTOR PLUGGED IN, because with nothing
+connected the silence is the correct state (jrackerby/HA#771) and a restart
+would loop until somebody plugged a monitor in. When one IS plugged in, the
+supervisor wakes from any pending backoff at once rather than sitting out the
+remainder of a five-minute wait it earned against a display that is now back.
+
 FLAGS ARE A BASE SET PLUS THE OPERATOR'S, AND CONFLICTS RESOLVE TOWARDS THE
 OPERATOR. The base set is what makes a browser a kiosk (no first-run bubbles,
 no error dialogs, no update checks, a fixed profile). An operator flag with the
@@ -134,6 +153,26 @@ CURSOR_EXTENSION_FILES: dict[str, str] = {
 }
 
 
+def _prefer_browser_for_oom(pid: int) -> None:
+    """Put the browser ahead of the agent in the kernel's OOM ordering.
+
+    The unit runs the agent at ``OOMScoreAdjust=-500`` so that when a Pi runs
+    out of memory the kernel takes a Chromium renderer and not the process
+    that would restart it. A child inherits its parent's adjustment, so the
+    browser is moved back to 0 here — an unprivileged process may RAISE a
+    child's score, never lower it, which is why the direction is this way
+    round and why nothing needs sudo. Written from the parent after fork,
+    before cage has had time to fork Chromium; a lost race costs nothing, the
+    whole tree simply shares the agent's score and the kernel still picks the
+    largest resident set, which is a renderer.
+    """
+    try:
+        with open(f"/proc/{pid}/oom_score_adj", "w", encoding="ascii") as handle:
+            handle.write("0")
+    except OSError as err:
+        _LOGGER.debug("oom_score_adj not reset for %s: %s", pid, err)
+
+
 def merge_flags(base: tuple[str, ...] | list[str], extra: list[str]) -> list[str]:
     """Operator flags override base flags of the same name; order is stable.
 
@@ -162,20 +201,57 @@ class BrowserSupervisor:
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._restart_count = 0
+        self._crash_count = 0
+        self._commanded_count = 0
+        self._watchdog_count = 0
         self._last_start: float | None = None
         self._last_exit_code: int | None = None
+        self._last_exit_reason: str | None = None
+        # Set BEFORE the process is signalled, read when it exits, so the
+        # supervision loop can tell an exit it caused from one it did not.
+        self._exit_expected: str | None = None
         self._pending_url: str | None = None
         self._on_started: list[Callable[[], None]] = []
+        # Liveness. `_last_responsive` is the last time DevTools answered;
+        # `_display_connected` is the kernel's last word on the connector, and
+        # a reconnect resets the hang clock and cuts a pending backoff short.
+        self._last_responsive: float | None = None
+        self._display_connected: bool | None = None
+        self._display_reconnected_at: float | None = None
+        self._wake = threading.Event()
 
     # --- lifecycle ----------------------------------------------------------
 
     @property
     def restart_count(self) -> int:
+        """Every exit that led to a relaunch, whatever caused it."""
         return self._restart_count
+
+    @property
+    def crash_count(self) -> int:
+        """Exits nobody asked for. THE signal; the total above is not."""
+        return self._crash_count
+
+    @property
+    def commanded_restart_count(self) -> int:
+        return self._commanded_count
+
+    @property
+    def watchdog_restart_count(self) -> int:
+        return self._watchdog_count
 
     @property
     def last_exit_code(self) -> int | None:
         return self._last_exit_code
+
+    @property
+    def last_exit_reason(self) -> str | None:
+        """``commanded``, ``watchdog`` or ``crash`` — or None before any exit."""
+        return self._last_exit_reason
+
+    @property
+    def display_connected(self) -> bool | None:
+        return self._display_connected
 
     @property
     def running_since(self) -> float | None:
@@ -201,7 +277,8 @@ class BrowserSupervisor:
 
     def shutdown(self) -> None:
         self._stop.set()
-        self._terminate()
+        self._wake.set()
+        self._terminate(reason="commanded")
         thread = self._thread
         if thread is not None:
             thread.join(timeout=15)
@@ -216,11 +293,24 @@ class BrowserSupervisor:
         """
         with self._lock:
             self._pending_url = url
-        self._terminate()
+        self._terminate(reason="commanded")
 
-    def _terminate(self) -> None:
+    def recover(self, why: str) -> None:
+        """Restart a browser the watchdog has judged dead while still running.
+
+        Distinct from :meth:`restart` only in how the exit is counted: a
+        forced recovery is the agent's own finding about the browser, not an
+        operator's instruction, and the two must not share a counter or the
+        crash signal disappears into the deploy noise all over again.
+        """
+        _LOGGER.warning("restarting the browser: %s", why)
+        self._terminate(reason="watchdog")
+
+    def _terminate(self, reason: str | None = None) -> None:
         with self._lock:
             process = self._process
+            if reason is not None:
+                self._exit_expected = reason
         if process is None or process.poll() is not None:
             return
         # SIGTERM to the whole process group. cage forks Chromium, and Chromium
@@ -332,6 +422,9 @@ class BrowserSupervisor:
             )
             self._last_start = time.time()
             self._last_exit_code = None
+            self._last_responsive = None
+            self._exit_expected = None
+        _prefer_browser_for_oom(self._process.pid)
         for callback in self._on_started:
             try:
                 callback()
@@ -355,7 +448,7 @@ class BrowserSupervisor:
                 # missing binary in a tight loop writes megabytes of journal an
                 # hour to an SD card that is already the fleet's weakest part.
                 backoff = min(max(backoff * 2, 5.0), 300.0)
-                self._stop.wait(backoff)
+                self._wait(backoff)
                 continue
 
             with self._lock:
@@ -364,9 +457,23 @@ class BrowserSupervisor:
             with self._lock:
                 self._last_exit_code = code
                 self._process = None
+                reason = self._exit_expected or "crash"
+                self._exit_expected = None
             if self._stop.is_set():
                 return
-            self._restart_count += 1
+            self._record_exit(reason)
+            if reason != "crash":
+                # An exit this agent asked for is relaunched on the configured
+                # delay and never compounds the backoff: a fleet deploy that
+                # restarts every wall twice in ten seconds is not a browser
+                # that cannot start, and treating it as one would leave the
+                # second launch waiting out a penalty the browser did not earn.
+                backoff = float(self._settings.get("browserRestartBackoffSeconds"))
+                _LOGGER.info("browser exited with %s (%s restart #%d); "
+                             "relaunching in %.0fs", code, reason,
+                             self._restart_count, backoff)
+                self._wait(backoff)
+                continue
             if not self._settings.get("browserRestartOnCrash"):
                 _LOGGER.error(
                     "browser exited (%s) and browserRestartOnCrash is off; "
@@ -383,10 +490,105 @@ class BrowserSupervisor:
             else:
                 backoff = min(max(backoff * 2, configured or 1.0), 300.0)
             _LOGGER.warning(
-                "browser exited with %s after %.0fs (restart #%d); "
-                "restarting in %.0fs", code, ran_for, self._restart_count, backoff
+                "browser exited with %s after %.0fs (crash #%d, restart #%d); "
+                "restarting in %.0fs", code, ran_for, self._crash_count,
+                self._restart_count, backoff
             )
-            self._stop.wait(backoff)
+            self._wait(backoff)
+
+    def _record_exit(self, reason: str) -> None:
+        with self._lock:
+            self._restart_count += 1
+            self._last_exit_reason = reason
+            if reason == "commanded":
+                self._commanded_count += 1
+            elif reason == "watchdog":
+                self._watchdog_count += 1
+            else:
+                self._crash_count += 1
+
+    def _wait(self, seconds: float) -> None:
+        """Sleep out a backoff, unless something worth waking for happens.
+
+        Two things end it early: shutdown, and a display coming back. The
+        second is why this is not ``self._stop.wait``: a wall whose monitor was
+        off long enough for cage to give up five times has earned a 300s
+        backoff against a display that no longer exists, and sitting it out
+        after the display returns is five minutes of black glass for nothing.
+        """
+        self._wake.clear()
+        self._wake.wait(seconds)
+
+    # --- liveness -----------------------------------------------------------
+
+    def note_display(self, connected: bool | None, now: float | None = None) -> None:
+        """Record the kernel's connector status; react to a reconnect.
+
+        ``None`` (unreadable) is recorded and otherwise ignored — it neither
+        arms nor disarms anything, so a host with no readable DRM behaves
+        exactly as it did before this reading existed.
+        """
+        now = time.time() if now is None else now
+        with self._lock:
+            previous = self._display_connected
+            self._display_connected = connected
+        if connected is True and previous is False:
+            _LOGGER.info("display output reconnected; the browser gets a fresh "
+                         "%ss to answer before it is restarted",
+                         self._settings.get("browserHangSeconds"))
+            with self._lock:
+                self._display_reconnected_at = now
+            self._wake.set()
+        elif connected is False and previous is True:
+            _LOGGER.info("display output disconnected; the browser will not be "
+                         "restarted while nothing is plugged in")
+
+    def responsive(self) -> bool:
+        """Did DevTools answer just now. The liveness probe, nothing more."""
+        try:
+            self.cdp().version()
+        except CDPError:
+            return False
+        return True
+
+    def check_liveness(self, now: float | None = None) -> str | None:
+        """Restart a running browser that has gone silent on a connected output.
+
+        Returns the reason string when it acted, None otherwise. The clock
+        runs from the LATEST of: launch, the last DevTools answer, and the
+        last display reconnect — so a fresh launch, a browser that was fine a
+        moment ago and a monitor just plugged back in each get the full
+        ``browserHangSeconds`` before anything is concluded.
+
+        NEVER ACTS ON A GUESS. Watchdog disabled, browser not running, or
+        connector state anything but a positive ``connected`` — all return
+        None. The bench host with nothing plugged in reads unresponsive for
+        ever and that is correct; restarting it would be the loop this gate
+        exists to refuse.
+        """
+        now = time.time() if now is None else now
+        limit = int(self._settings.get("browserHangSeconds"))
+        if limit <= 0 or not self.is_running():
+            return None
+        with self._lock:
+            connected = self._display_connected
+        if connected is not True:
+            return None
+        if self.responsive():
+            with self._lock:
+                self._last_responsive = now
+            return None
+        with self._lock:
+            # `is None` tests, not truthiness: a clock reading of 0.0 is a
+            # time, and `or` would replace it with `now` and never fire.
+            anchors = [t for t in (self._last_start, self._last_responsive,
+                                   self._display_reconnected_at) if t is not None]
+        silent_for = now - (max(anchors) if anchors else now)
+        if silent_for < limit:
+            return None
+        self.recover(f"no DevTools answer for {silent_for:.0f}s on a connected "
+                     f"output (limit {limit}s)")
+        return "watchdog"
 
     # --- what it is showing -------------------------------------------------
 

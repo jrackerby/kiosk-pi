@@ -224,6 +224,15 @@ log "agent is answering:"
 python3 -m json.tool /tmp/pikioskd-install-check.json
 rm -f /tmp/pikioskd-install-check.json
 
+# The unit's recovery directives, read back from the running manager rather
+# than from the file just installed: a systemd older than 254 ignores
+# RestartSteps with one journal line, and a Type=notify unit whose agent never
+# sent READY would not have got this far. WatchdogUSec=0 here means the
+# watchdog is NOT armed on this host, whatever the unit file says.
+log "recovery directives as systemd read them:"
+systemctl show "$UNIT_NAME" -p Type,WatchdogUSec,OOMPolicy,RestartSteps,NRestarts \
+  2>/dev/null | sed 's/^/    /' || true
+
 if [[ -n "${NEW_PASSWORD:-}" ]]; then
   cat <<EOF
 
