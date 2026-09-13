@@ -87,8 +87,13 @@ repository's to record.
 - `hacs/action`'s validators gate DEFAULT-STORE INCLUSION, not whether a
   custom-repository install works: `async_run_repository_checks` returns
   immediately unless `hacs.system.action`.
-- `brands` can never pass from a custom repository — `home-assistant/brands`
-  takes core integrations only.
+- **`brands` passes on a file, not a PR.** hacs/integration's
+  `validate/brands.py` looks for `brand/icon.png` in the tree first — at the
+  root under `content_in_root`, else `custom_components/<domain>/brand/` — and
+  asks `home-assistant/brands` (core only) solely when that file is absent.
+  Core's `has_branding` serves the same directory ahead of the CDN, after a
+  restart. The `ignore: brands` this repo carried until 1.1.1 was hiding a
+  gate that would have passed.
 
 ## Chromium DevTools on a panel
 

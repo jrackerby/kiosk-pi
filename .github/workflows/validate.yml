@@ -56,10 +56,13 @@ jobs:
         if: ${{ !github.event.repository.private }}
         with:
           category: integration
-          # `brands` needs an accepted PR against home-assistant/brands, which
-          # takes core integrations only, so the check can never pass from
-          # here. quality_scale.yaml records the same thing as an exemption.
-          ignore: brands
+          # NOTHING ignored. `brands` reads `custom_components/kiosk_pi/brand/
+          # icon.png` out of the tree (hacs/integration's validate/brands.py:
+          # `<content path>/brand/icon.png` when the layout is not
+          # content_in_root) and only falls back to home-assistant/brands when
+          # that file is absent. It is committed, so an `ignore:` here would be
+          # hiding a green gate -- and the default-store submission requires a
+          # run without one.
 
   agent:
     name: agent suite (standard library only)
