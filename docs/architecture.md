@@ -220,9 +220,8 @@ it.
 
 **The counts, not the states, are the signals — and the crash count, not the
 total.** `browser_restarts` is a `TOTAL_INCREASING` sensor because a
-crash-looping Chromium under `Restart=always` reports `active` on every poll
-that lands between crashes; `systemctl is-active` proves nothing about a
-browser, and the restart count is the only reading that moves. It counts every
+crash-looping Chromium under `Restart=always` still reads `active`; the restart
+count is the signal (LAW §10). It counts every
 relaunch, though, and measured over 48 hours on four panels every one of its
 increments was a fleet deploy pressing `restart_browser` (kiosk-pi#18). The
 supervisor therefore classifies each exit — `commanded` (the API asked),
