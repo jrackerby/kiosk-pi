@@ -116,7 +116,7 @@ The installer:
 - **disables** any existing `kiosk.service` without deleting it, so rolling
   back is `systemctl disable --now pikioskd && systemctl enable --now kiosk`;
 - verifies by calling the agent's own API back over the loopback, because
-  `systemctl is-active` reads `active` for a service that is crash-looping.
+  `systemctl is-active` proves nothing about a crash-looping service (LAW §10).
 
 Re-run it to upgrade. It leaves the settings file alone.
 
@@ -251,9 +251,7 @@ while `remoteAdminPassword` is empty, and says so on every start.
 **The panel is up but the browser is down.** `binary_sensor.<panel>_browser` is
 off and `sensor.<panel>_browser_restarts` is climbing. The agent backs its
 restarts off exponentially, so a panel that cannot start does not spend its SD
-card's remaining write cycles finding out. The count is the signal — a
-crash-looping browser under any restart-always supervisor reads `active`
-for ever.
+card's remaining write cycles finding out. The count is the signal (LAW §10).
 
 **The wall is showing an outage page.** `sensor.<panel>_current_page` will say
 so, carrying the failed URL and Chromium's own error code in its query string.

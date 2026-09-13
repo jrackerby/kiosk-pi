@@ -63,37 +63,26 @@ repository's to record.
   agent suite errors with `SocketBlockedError` on every server test while
   its own `requirements-test.txt` is blameless. `-p no:socket` does not
   clear it. CI never sees this because each suite is its own job with its
-  own install; locally, one venv per suite. Measured 2026-09-11.
+  own install; locally, one venv per suite.
 
 ## `hassfest` and the quality scale
 
-- **`hassfest` NEVER CHECKS A CUSTOM COMPONENT AGAINST THE QUALITY SCALE.**
-  `validate_iqs_file` opens with `if not integration.core: return`, so
-  `quality_scale.yaml` goes unread — while `manifest.json`'s schema still
-  ACCEPTS a `quality_scale` key. A tier declared there is a self-claim with no
-  gate behind it, green for ever. Read the rule list from `ALL_RULES` in
-  `home-assistant/core`'s `script/hassfest/quality_scale.py`, never from the
-  docs page, which names the tiers and not the rules.
-- `home-assistant/actions/hassfest` takes **no path input**: it scans
-  `custom_components/*` at the workspace root. Handed a repository laid out any
-  other way it finds zero integrations and reports green over nothing.
+- The quality scale is the build standard and hassfest never checks a custom
+  component against it: `jrackerby/HA` LAW §15 carries the rule.
+- `home-assistant/actions/hassfest` takes no path input: `jrackerby/HA`
+  `tools/work_docs/TOOLS.md` ("Landing a branch") carries the trap.
 
 ## HACS
 
-- **HACS fetches `hacs.json` and `manifest.json` from
-  `raw.githubusercontent.com` with NO `Authorization` header**, in CI and in a
-  live install alike, so a private repository 404s there and the failure
-  presents as "invalid hacs.json". That bites a real install, not just CI.
+- HACS reaches only a public repo; the 404 a private one produces is
+  `jrackerby/HA` LAW §15.
 - `hacs/action`'s validators gate DEFAULT-STORE INCLUSION, not whether a
   custom-repository install works: `async_run_repository_checks` returns
   immediately unless `hacs.system.action`.
-- **`brands` passes on a file, not a PR.** hacs/integration's
-  `validate/brands.py` looks for `brand/icon.png` in the tree first — at the
-  root under `content_in_root`, else `custom_components/<domain>/brand/` — and
-  asks `home-assistant/brands` (core only) solely when that file is absent.
-  Core's `has_branding` serves the same directory ahead of the CDN, after a
-  restart. The `ignore: brands` this repo carried until 1.1.1 was hiding a
-  gate that would have passed.
+- `brands` passes on `brand/icon.png` in the tree, not a `home-assistant/brands`
+  PR: `jrackerby/HA` `tools/work_docs/TOOLS.md` carries the trap. The
+  `ignore: brands` this repo carried until 1.1.1 was hiding a gate that would
+  have passed.
 
 ## Chromium DevTools on a panel
 
@@ -113,7 +102,7 @@ repository's to record.
   `current_page` unknown, `monitor` unknown and `cursor_hidden` unavailable
   on a panel whose browser is `on`. Read the DRM status before diagnosing
   the browser; it is a bench host with nothing plugged in. Measured on the
-  bench panel, 2026-09-11.
+  bench panel.
 - **`/json/list`'s key ORDER IS NOT A CONTRACT.** Parse it as JSON. A pattern
   assuming `type` precedes `url` reads the wrong field the day Chromium
   reorders them, and reads it confidently.
@@ -149,12 +138,12 @@ repository's to record.
   `browserRestartCount`. Keep the profile in the unit's `StateDirectory`
   (`/var/lib/pikioskd`), never under `/home`; `tests/test_unit_sandbox.py` joins
   the unit's writable set to the settings default so the two cannot drift again.
-  Measured on the first panel, 2026-09-10, on 1.0.0's first hardware install.
+  Measured on the first panel, on 1.0.0's first hardware install.
 - **`NoNewPrivileges=yes` FORBIDS `sudo` ENTIRELY, AND THE FAILURE IS SILENT.**
   It sets `PR_SET_NO_NEW_PRIVS`, which stops a setuid binary elevating at all;
   sudo does not degrade, it refuses — `sudo: The "no new privileges" flag is
   set, which prevents sudo from running as root.` Measured with
-  `prctl(PR_SET_NO_NEW_PRIVS)` against a real setuid sudo, 2026-09-10: without
+  `prctl(PR_SET_NO_NEW_PRIVS)` against a real setuid sudo: without
   the flag the same call reaches authentication ("a password is required"), so
   the flag, not the sudoers file, is the discriminator. A no-password sudoers
   drop-in therefore grants nothing while it is on. On this agent it hit
@@ -187,11 +176,10 @@ repository's to record.
   does not honour. Permissions were only the trigger here; a full SD card or an
   ext4 that has flipped read-only produces it identically, and this fleet
   carries a sensor for the latter because it happens. Verified as an
-  unprivileged user against an unwritable directory, 2026-09-10 — as root the
+  unprivileged user against an unwritable directory — as root the
   same test passes and proves nothing, because root bypasses the check.
-- **`systemctl is-active` PROVES NOTHING ABOUT A BROWSER.** Under
-  `Restart=always` a crash-looping Chromium reports `active` for ever. The
-  restart COUNT is the signal, which is why the agent publishes its own.
+- `systemctl is-active` proves nothing about a browser; the restart COUNT is
+  the signal (`jrackerby/HA` LAW §10), which is why the agent publishes its own.
 - **SIGNAL THE PROCESS GROUP, NOT THE LEADER.** `cage` forks Chromium and
   Chromium forks a zygote and a renderer per tab; signalling the leader alone
   leaves orphans holding the DRM device, after which the next `cage` cannot take
@@ -231,7 +219,7 @@ repository's to record.
   `--disable-features=DisableLoadExtensionCommandLineSwitch` escape hatch — at
   142. Unbranded Chromium keeps both, and Raspberry Pi OS packages unbranded
   Chromium, which is what `chromiumBinary` defaults to. Measured on the live
-  fleet 2026-09-11: all four panels report 152.0.7977.82. THAT IS THE VERSION
+  fleet: all four panels report 152.0.7977.82. THAT IS THE VERSION
   AND NOT THE BEHAVIOUR — whether an extension actually loads on these hosts
   is unverified, and stays unverified until somebody reads a wall. Reading the
   version alone says "past 142, therefore broken" and is wrong here; carrying
