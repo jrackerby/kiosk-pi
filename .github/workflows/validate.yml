@@ -19,43 +19,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hassfest:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
+  # hassfest, hacs and the shared tests/imports jobs run in
+  # jrackerby/gha-workflows validate-integration.yml (workflow_call);
+  # master's required contexts are "validate / <job>" (jrackerby/HA#821).
+  validate:
+    uses: jrackerby/gha-workflows/.github/workflows/validate-integration.yml@master
+    with:
+      domain: "kiosk_pi"
+      public: true
+      test-command: ""
+      run-imports: false
+      content-in-root: false
 
-      # NO STAGING STEP ANY MORE. It used to exist because the integration
-      # lived at the repository root (hacs.json content_in_root) while
-      # hassfest takes no path input and scans custom_components/* at the
-      # workspace root. 1.0.0 moved the integration into the standard layout —
-      # partly so the device-side agent could live at the root without being
-      # shipped into /config/custom_components alongside it — and the staging
-      # copy went with it. A copy step that silently moved nothing would have
-      # let hassfest validate an empty tree and report green.
-      - uses: home-assistant/actions/hassfest@master
-
-  hacs:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      # HACS fetches hacs.json and manifest.json from raw.githubusercontent.com
-      # with NO Authorization header, in CI and in a live install alike, so a
-      # PRIVATE repository 404s there and the failure reads as "invalid
-      # hacs.json". Reported as VOID rather than green: the check did not run,
-      # so nothing was proven either way.
-      - name: VOID -- HACS validation cannot run against a private repository
-        if: ${{ github.event.repository.private }}
-        run: |
-          echo "::notice title=HACS validation VOID::this repository is private, so HACS cannot read it"
-          echo "Nothing about HACS compatibility was verified in this run."
-
-      - uses: hacs/action@main
-        if: ${{ !github.event.repository.private }}
-        with:
-          category: integration
           # NOTHING ignored. `brands` reads `custom_components/kiosk_pi/brand/
           # icon.png` out of the tree (hacs/integration's validate/brands.py:
           # `<content path>/brand/icon.png` when the layout is not
