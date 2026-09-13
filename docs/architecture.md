@@ -218,11 +218,27 @@ If that ever reverses, the four artefacts and the drift check that watched them
 come back together; the standard was only ever safe because something watched
 it.
 
-**The counts, not the states, are the signals.** `browser_restarts` is a
-`TOTAL_INCREASING` sensor because a crash-looping Chromium under
-`Restart=always` reports `active` on every poll that lands between crashes;
-`systemctl is-active` proves nothing about a browser, and the restart count is
-the only reading that moves.
+**The counts, not the states, are the signals — and the crash count, not the
+total.** `browser_restarts` is a `TOTAL_INCREASING` sensor because a
+crash-looping Chromium under `Restart=always` reports `active` on every poll
+that lands between crashes; `systemctl is-active` proves nothing about a
+browser, and the restart count is the only reading that moves. It counts every
+relaunch, though, and measured over 48 hours on four panels every one of its
+increments was a fleet deploy pressing `restart_browser` (kiosk-pi#18). The
+supervisor therefore classifies each exit — `commanded` (the API asked),
+`watchdog` (the agent's own liveness check forced it), `crash` (nobody asked) —
+and `browser_crashes` publishes only the last class, with the other two as
+attributes so the three can be summed against the total.
+
+**Process exit is not the only way a wall goes dark.** A Chromium wedged on the
+GPU keeps its pid; `cage` started with no output runs for ever with DevTools
+never opened. The agent restarts a running browser that has answered no
+DevTools request for `browserHangSeconds` (default 120), **gated on the kernel
+reporting a connector plugged in** (`/sys/class/drm/*/status`, published as
+`binary_sensor.<panel>_display_connected`): with nothing connected the silence
+is correct (jrackerby/HA#771) and a restart would loop until somebody plugged a
+monitor in. A reconnect resets that clock and wakes the supervisor from any
+backoff it earned against the display that was missing.
 
 **`vcgencmd get_throttled`'s high half is sticky** — bits 16–19 are since-boot,
 so a wall that browned out at 3am still reports it at noon. An unreadable
@@ -363,6 +379,27 @@ than left as deployment detail.
 
 Both have the same shape: a sandbox directive forbidding the one thing the
 service exists to do, reported by nothing.
+
+The unit also carries the agent's own recovery, each directive joined to the
+line of source that honours it by the same test file:
+
+- **`Type=notify` + `WatchdogSec=90`.** Under `Type=simple` systemd knows one
+  thing about the agent: whether it exited. The agent sends `READY=1` once the
+  API is bound and `WATCHDOG=1` once a second — only while its HTTP thread is
+  alive AND its supervision loop has finished a tick within six ticks — so a
+  wedged loop stops the pings and is killed and restarted. `sdnotify.py` is
+  the protocol in forty stdlib lines; no libsystemd, no package.
+- **`OOMPolicy=continue`, `OOMScoreAdjust=-500`.** The default `OOMPolicy=stop`
+  stops the WHOLE service when the kernel OOM-kills any one process in its
+  cgroup — a Chromium renderer on a 1 GB Pi 3B. `continue` leaves the agent
+  standing to relaunch the browser; the score puts the agent behind the browser
+  in the kernel's ordering, and since a child inherits its parent's score the
+  agent raises the browser's back to 0 at launch.
+- **`RestartSteps=6` / `RestartMaxDelaySec=300`.** The agent's OWN restarts back
+  off from 5 s to 300 s; an agent that cannot import under a flat `RestartSec=5`
+  relaunches 17,000 times a day into the journal of an SD card.
+- **`KillMode=mixed`, `TimeoutStopSec=30`.** A stop SIGTERMs the agent alone,
+  which tears the browser's process group down in order before exiting.
 
 ---
 

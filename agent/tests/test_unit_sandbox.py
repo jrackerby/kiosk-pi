@@ -218,3 +218,79 @@ def test_the_install_directive_check_can_fail():
     """Self-test: the parse finds a real line, so a pass means something."""
     assert _install_directive("CONFIG_DIR") is not None
     assert _install_directive("NO_SUCH_VARIABLE") is None
+
+
+# --- the recovery directives, joined to the code that honours them ----------------
+#
+# Each of these is a pairing between a unit directive and a line of agent
+# source, and each half is useless without the other: Type=notify with no
+# READY=1 is a unit that never starts; WatchdogSec with no ping is a unit
+# killed every interval; OOMScoreAdjust with no child reset is a browser
+# protected from the OOM killer at the agent's expense.
+
+def _agent_source() -> str:
+    package = pathlib.Path(__file__).resolve().parents[1] / "pikioskd"
+    return "\n".join(
+        line.split("#", 1)[0]
+        for module in sorted(package.glob("*.py"))
+        for line in module.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def test_notify_type_is_backed_by_a_ready_call():
+    service = _unit()["Service"]
+    assert service.get("Type") == "notify"
+    assert service.get("NotifyAccess") == "main"
+    assert "sdnotify.ready()" in _agent_source()
+
+
+def test_the_watchdog_is_fed_and_outlasts_the_agents_own_stale_threshold():
+    """WatchdogSec must exceed the loop's stale threshold, or ONE slow tick is
+    a kill: the agent stops pinging at six ticks, systemd must wait longer."""
+    from pikioskd.agent import TICK_SECONDS
+
+    service = _unit()["Service"]
+    watchdog = float(service.get("WatchdogSec"))
+    assert watchdog > TICK_SECONDS * 6
+    assert "sdnotify.watchdog_ping()" in _agent_source()
+
+
+def test_a_renderer_oom_kill_does_not_stop_the_agent():
+    service = _unit()["Service"]
+    assert service.get("OOMPolicy") == "continue", (
+        "the default OOMPolicy=stop takes the whole service down when the "
+        "kernel kills ONE Chromium renderer in its cgroup"
+    )
+
+
+def test_the_agent_is_behind_the_browser_in_the_oom_order():
+    service = _unit()["Service"]
+    assert int(service.get("OOMScoreAdjust")) < 0
+    assert "oom_score_adj" in _agent_source(), (
+        "a child inherits the parent's adjustment; the agent must raise the "
+        "browser's back to 0 or the protection covers the wrong process"
+    )
+
+
+def test_the_agents_own_restarts_are_backed_off_and_never_given_up():
+    unit, service = _unit()["Unit"], _unit()["Service"]
+    assert service.get("Restart") == "always"
+    assert int(service.get("RestartSteps")) > 1
+    assert int(service.get("RestartMaxDelaySec")) > int(service.get("RestartSec"))
+    assert unit.get("StartLimitIntervalSec") == "0"
+
+
+def test_the_stop_is_ordered_through_the_agent():
+    service = _unit()["Service"]
+    assert service.get("KillMode") == "mixed"
+    assert int(service.get("TimeoutStopSec")) >= 25, (
+        "the agent's shutdown joins the supervisor for 15s after a 10s "
+        "SIGTERM wait; a shorter stop timeout SIGKILLs it mid-teardown"
+    )
+
+
+def test_the_recovery_pairings_can_fail():
+    """Self-test: the source join is a real search, not a constant."""
+    assert "this string is not in the agent" not in _agent_source()
+    with pytest.raises(AssertionError):
+        assert "sdnotify.ready()" not in _agent_source()

@@ -44,7 +44,11 @@ Per panel:
   back to; `image.<panel>_screenshot` shows it.
 - **The screen** — on/off, brightness, a screen-off timer and a screensaver
   timer, all persisted on the device.
-- **The browser** — running or not, its restart count, its version; restart it,
+- **The browser** — running or not, its version, and two counts that are NOT
+  the same count: every relaunch, and only the ones nobody asked for. A fleet
+  deploy that presses "restart browser" on every wall moves the first and not
+  the second, so a threshold on `browser_crashes` fires on a dying browser and
+  on nothing else. Restart it,
   flush its cache, bring it to the front.
 - **A full-screen overlay message** (`notify.<panel>_overlay_message`) drawn
   *over* the live board rather than navigating away from it, so clearing it
@@ -53,9 +57,16 @@ Per panel:
   choosing and any failed load lands there instead of on Chromium's own error
   screen — per device, needing no automation, surviving a reboot.
 - **Enough host telemetry to explain a misbehaving panel** — CPU temperature,
-  memory, storage, Wi-Fi signal, and the Raspberry Pi throttle bitmask, whose
-  since-boot half means a wall that browned out at 3am is still saying so at
-  noon.
+  clock and core voltage, memory, storage, Wi-Fi signal, whether a screen is
+  actually plugged in (the kernel's hotplug line, which the compositor cannot
+  tell you), and the Raspberry Pi throttle bitmask, whose since-boot half
+  means a wall that browned out at 3am is still saying so at noon.
+- **Recovery that does not need the process to die.** A browser that has
+  answered no DevTools request for two minutes on a connected output is
+  restarted by the agent and counted as a watchdog restart; a monitor plugged
+  back in wakes the supervisor from any backoff it was sitting out. The agent
+  itself runs under a systemd watchdog it feeds only while both its threads
+  are provably alive.
 
 ## What this cannot do
 

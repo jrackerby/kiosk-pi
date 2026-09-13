@@ -196,6 +196,111 @@ def throttle() -> dict[str, Any]:
     return decode_throttle(_run(["vcgencmd", "get_throttled"]))
 
 
+def cpu_frequency_mhz() -> float | None:
+    """The running clock of the first CPU, from cpufreq, in MHz.
+
+    THE COMPANION TO THE THROTTLE BITMASK. ``arm_frequency_capped`` says the
+    firmware has pulled the clock down; this says by how much, and it moves
+    before the bit does on a panel drifting towards its thermal limit. Read
+    from the kernel's cpufreq rather than ``vcgencmd measure_clock`` so it is
+    also right on a host that is not a Raspberry Pi.
+    """
+    raw = _read_text("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+    if raw is None:
+        return None
+    try:
+        return round(int(raw.strip()) / 1000, 0)
+    except ValueError:
+        return None
+
+
+_VOLTS_RE = re.compile(r"volt=(?P<volts>[\d.]+)V")
+
+
+def parse_core_voltage(raw: str | None) -> float | None:
+    """``vcgencmd measure_volts core`` — ``volt=0.9360V`` — as a float."""
+    if not raw:
+        return None
+    match = _VOLTS_RE.search(raw)
+    if not match:
+        return None
+    try:
+        return float(match.group("volts"))
+    except ValueError:
+        return None
+
+
+def core_voltage_v() -> float | None:
+    """The SoC core rail, from the firmware, or None where there is no firmware.
+
+    Not the 5V input — nothing on a Pi can read that — but the rail the
+    firmware lowers when it throttles, so a wall reporting ``under_voltage``
+    shows it here as a number that moved rather than a bit that flipped.
+    """
+    if shutil.which("vcgencmd") is None:
+        return None
+    return parse_core_voltage(_run(["vcgencmd", "measure_volts", "core"]))
+
+
+# DRM connectors, from sysfs. The compositor is the authority on what it is
+# DRIVING; the kernel is the authority on what is PLUGGED IN, and the two
+# disagree in exactly the case worth catching: with nothing connected, cage
+# starts, Chromium starts, the process table is full, `browserRunning` is
+# true — and DevTools never opens, so every browser-backed reading is unknown
+# on a panel that reads healthy (jrackerby/HA#771). The `Writeback` connector
+# is the compositor's own virtual output and is never a screen.
+_DRM_GLOB = "/sys/class/drm/card*-*/status"
+
+
+def parse_connector_name(path: str) -> str | None:
+    """``/sys/class/drm/card0-HDMI-A-1/status`` -> ``HDMI-A-1``.
+
+    Matches the name ``wlr-randr`` uses for the same output, so the two
+    instruments' readings join on it.
+    """
+    directory = os.path.basename(os.path.dirname(path))
+    _card, sep, name = directory.partition("-")
+    return name if sep and name else None
+
+
+def drm_connectors(pattern: str = _DRM_GLOB) -> list[dict[str, Any]] | None:
+    """Every physical connector and its hotplug status, or None if unreadable.
+
+    ``status`` is what the kernel reads back off the connector's hotplug
+    detect line: ``connected``, ``disconnected`` or ``unknown``. An empty
+    list is a host with a DRM device and no connectors; None is a host with
+    no readable DRM at all — the two are different findings.
+    """
+    paths = sorted(glob.glob(pattern))
+    if not paths:
+        return None
+    records: list[dict[str, Any]] = []
+    for path in paths:
+        name = parse_connector_name(path)
+        if not name or name.startswith("Writeback"):
+            continue
+        status = (_read_text(path) or "").strip() or None
+        records.append({"name": name, "status": status})
+    return records
+
+
+def display_connected(connectors: list[dict[str, Any]] | None) -> bool | None:
+    """Is anything plugged in. True, False, or None for could-not-read.
+
+    UNKNOWN IS NOT DISCONNECTED. A connector whose status could not be read
+    is left out of the decision; if that leaves nothing decidable the answer
+    is None, never False — a restart decision made on an unreadable sysfs
+    would restart the browser on every host that lacks the file.
+    """
+    if connectors is None:
+        return None
+    known = [c["status"] for c in connectors if c.get("status") in
+             ("connected", "disconnected")]
+    if not known:
+        return None
+    return "connected" in known
+
+
 def parse_wireless(raw: str | None) -> dict[str, Any]:
     """``/proc/net/wireless`` — the kernel file, not ``iw``.
 
@@ -298,6 +403,8 @@ def base_info() -> dict[str, Any]:
         "storageUsedPercent": storage_record["usedPercent"],
         "rootFilesystem": root_filesystem_mode(),
         "cpuTemperatureC": cpu_temperature_c(),
+        "cpuFrequencyMHz": cpu_frequency_mhz(),
+        "coreVoltageV": core_voltage_v(),
         "throttle": throttle(),
         "wifi": wifi(),
         "interfaces": interfaces(),

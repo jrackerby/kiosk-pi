@@ -35,6 +35,8 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     EntityCategory,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfElectricPotential,
+    UnitOfFrequency,
     UnitOfInformation,
     UnitOfTemperature,
 )
@@ -111,12 +113,34 @@ SENSORS: tuple[KioskPiSensorDescription, ...] = (
     # supervisor that restarts it always reads "running" on every poll that
     # happens to land between crashes; the restart count is the only reading
     # that moves.
+    #
+    # AND THE CRASH COUNT IS THE SIGNAL, NOT THE TOTAL. `browser_restarts`
+    # keeps its 1.0.0 meaning — every relaunch, whatever caused it — so nothing
+    # reading it moves; but measured over 48 hours on four panels every one of
+    # its increments was an operator's button (a fleet deploy pressing
+    # restart_browser), so a threshold on it fires on every deploy and a
+    # browser that is actually dying is invisible under that. `browser_crashes`
+    # counts only exits nobody asked for; the commanded and watchdog parts
+    # ride as attributes, where the sum can be checked (kiosk-pi#18).
     KioskPiSensorDescription(
         key="browser_restarts",
         translation_key="browser_restarts",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: (c.data or {}).get("browserRestartCount"),
+    ),
+    KioskPiSensorDescription(
+        key="browser_crashes",
+        translation_key="browser_crashes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: (c.data or {}).get("browserCrashCount"),
+        attrs_fn=lambda c: {
+            "commanded_restarts": (c.data or {}).get("browserCommandedRestartCount"),
+            "watchdog_restarts": (c.data or {}).get("browserWatchdogRestartCount"),
+            "last_exit_reason": (c.data or {}).get("browserLastExitReason"),
+            "last_exit_code": (c.data or {}).get("browserLastExitCode"),
+        },
     ),
     KioskPiSensorDescription(
         key="cpu_temperature",
@@ -126,6 +150,31 @@ SENSORS: tuple[KioskPiSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda c: (c.data or {}).get("cpuTemperatureC"),
+    ),
+    # THE TWO READINGS THAT SAY WHAT THE THROTTLE BIT MEANS. `throttled` says
+    # the firmware has acted; the clock says by how much, and moves before the
+    # bit does on a panel drifting towards its limit; the core rail is what the
+    # firmware lowers when it does. Both are Pi-hardware facts about a wall
+    # misbehaving, not OS health, which is why they are here and apt is not.
+    KioskPiSensorDescription(
+        key="cpu_frequency",
+        translation_key="cpu_frequency",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: (c.data or {}).get("cpuFrequencyMHz"),
+    ),
+    KioskPiSensorDescription(
+        key="core_voltage",
+        translation_key="core_voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda c: (c.data or {}).get("coreVoltageV"),
     ),
     KioskPiSensorDescription(
         key="free_memory",

@@ -36,12 +36,30 @@ class KioskPiBinarySensorDescription(BinarySensorEntityDescription):
     """
 
     value_fn: Callable[[KioskPiCoordinator], bool | None]
+    attrs_fn: Callable[[KioskPiCoordinator], dict[str, Any]] | None = None
 
 
 def _throttled(coordinator: KioskPiCoordinator) -> bool | None:
     throttle = (coordinator.data or {}).get("throttle") or {}
     ok = throttle.get("ok")
     return None if ok is None else not ok
+
+
+def _display_connected(coordinator: KioskPiCoordinator) -> bool | None:
+    """Is a screen plugged in, by the kernel's hotplug line — not the compositor.
+
+    THE COMPOSITOR CANNOT ANSWER THIS. With nothing connected cage starts,
+    Chromium starts, `browser` reads on and the restart count sits still —
+    and DevTools never opens, so `current_page`, `monitor` and `resolution`
+    all read unknown on a panel whose every other reading is healthy. That
+    was a garage wall for three days (jrackerby/HA#771). The connector status
+    is the one reading that separates "blind" from "broken", and it is also
+    the gate on the agent's own hung-browser watchdog: with this off, the
+    agent does not restart a browser for having no DevTools.
+
+    Absent on an agent older than 1.2.0, which reads unavailable — not off.
+    """
+    return (coordinator.data or {}).get("displayConnected")
 
 
 def _read_only_root(coordinator: KioskPiCoordinator) -> bool | None:
@@ -129,6 +147,20 @@ SENSORS: tuple[KioskPiBinarySensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=_read_only_root,
     ),
+    KioskPiBinarySensorDescription(
+        key="display_connected",
+        translation_key="display_connected",
+        device_class=BinarySensorDeviceClass.PLUG,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_display_connected,
+        attrs_fn=lambda c: {
+            "connectors": {
+                str(r.get("name")): r.get("status")
+                for r in ((c.data or {}).get("displayConnectors") or [])
+            },
+            "output": (c.data or {}).get("displayOutput"),
+        },
+    ),
 )
 
 
@@ -163,6 +195,12 @@ class KioskPiBinarySensor(KioskPiEntity, BinarySensorEntity):
         # value_fn returns None for exactly this, and mapping it to False here
         # would throw away the distinction it was written to preserve.
         return super().available and self.is_on is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.coordinator)
 
 
 class KioskPiAgentReachable(KioskPiEntity, BinarySensorEntity):
@@ -202,5 +240,8 @@ class KioskPiAgentReachable(KioskPiEntity, BinarySensorEntity):
             "host": self.coordinator.client.host,
             "agent_version": data.get("agentVersion"),
             "browser_restart_count": data.get("browserRestartCount"),
+            "browser_crash_count": data.get("browserCrashCount"),
             "browser_last_exit_code": data.get("browserLastExitCode"),
+            "browser_last_exit_reason": data.get("browserLastExitReason"),
+            "browser_hang_seconds": data.get("browserHangSeconds"),
         }

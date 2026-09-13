@@ -75,6 +75,114 @@ async def test_readings_come_off_the_panel(
         "http://boards.invalid/alert-monitor/"
 
 
+# --- crashes vs restarts, and the display (jrackerby/kiosk-pi#18) -------------
+
+async def test_the_crash_count_is_its_own_reading_and_the_parts_sum(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """Two commanded restarts are two restarts and ZERO crashes.
+
+    Before 1.2.0 the fleet deploy's button press was indistinguishable from a
+    dying browser; the whole point of the second entity is that this test
+    can tell them apart.
+    """
+    mock_agent(aioclient_mock)
+    await setup(hass, config_entry)
+    restarts = hass.states.get("sensor.office_wall_browser_restarts")
+    crashes = hass.states.get("sensor.office_wall_browser_crashes")
+    assert restarts.state == "2"
+    assert crashes.state == "0"
+    assert crashes.attributes["commanded_restarts"] == 2
+    assert crashes.attributes["watchdog_restarts"] == 0
+    assert crashes.attributes["last_exit_reason"] == "commanded"
+    assert (int(crashes.state) + crashes.attributes["commanded_restarts"]
+            + crashes.attributes["watchdog_restarts"]) == int(restarts.state)
+
+
+async def test_a_crash_moves_the_crash_count(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    info = {**DEVICE_INFO, "browserRestartCount": 3, "browserCrashCount": 1,
+            "browserLastExitReason": "crash", "browserLastExitCode": -9}
+    mock_agent(aioclient_mock, device_info=info)
+    await setup(hass, config_entry)
+    crashes = hass.states.get("sensor.office_wall_browser_crashes")
+    assert crashes.state == "1"
+    assert crashes.attributes["last_exit_reason"] == "crash"
+    assert crashes.attributes["last_exit_code"] == -9
+
+
+async def test_an_old_agent_leaves_the_new_readings_unavailable_not_zero(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """A 1.1.x agent sends none of the new keys. Absent is unknown, never a
+    clean zero — a crash count of 0 read off an agent that cannot count
+    crashes is the reading a crash-looping panel would give."""
+    old = {k: v for k, v in DEVICE_INFO.items() if k not in (
+        "browserCrashCount", "browserCommandedRestartCount",
+        "browserWatchdogRestartCount", "browserLastExitReason",
+        "displayConnected", "displayConnectors", "cpuFrequencyMHz",
+        "coreVoltageV")}
+    mock_agent(aioclient_mock, device_info=old)
+    await setup(hass, config_entry)
+    assert hass.states.get("sensor.office_wall_browser_crashes").state == STATE_UNKNOWN
+    assert hass.states.get("binary_sensor.office_wall_display_connected").state == \
+        STATE_UNAVAILABLE
+    assert hass.states.get("sensor.office_wall_cpu_frequency").state == STATE_UNKNOWN
+    assert hass.states.get("sensor.office_wall_core_voltage").state == STATE_UNKNOWN
+    # And the old readings are untouched by the absence.
+    assert hass.states.get("sensor.office_wall_browser_restarts").state == "2"
+
+
+async def test_the_display_reading_is_the_kernels_not_the_compositors(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    mock_agent(aioclient_mock)
+    await setup(hass, config_entry)
+    state = hass.states.get("binary_sensor.office_wall_display_connected")
+    assert state.state == STATE_ON
+    assert state.attributes["connectors"] == {"HDMI-A-1": "connected",
+                                              "HDMI-A-2": "disconnected"}
+    assert state.attributes["output"] == "HDMI-A-1"
+
+
+async def test_a_blind_panel_reads_unplugged_while_the_browser_reads_on(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    """jrackerby/HA#771's shape: cage up, Chromium up, nothing plugged in.
+
+    Every browser-backed reading is unknown and `browser` is on; before this
+    entity that was indistinguishable from a compositor that failed."""
+    info = {**DEVICE_INFO, "displayConnected": False,
+            "displayConnectors": [{"name": "HDMI-A-1", "status": "disconnected"}],
+            "displayOutput": None, "currentURL": None, "resolution": None}
+    mock_agent(aioclient_mock, device_info=info)
+    await setup(hass, config_entry)
+    assert hass.states.get("binary_sensor.office_wall_display_connected").state == \
+        STATE_OFF
+    assert hass.states.get("binary_sensor.office_wall_browser").state == STATE_ON
+    assert hass.states.get("sensor.office_wall_current_page").state == STATE_UNKNOWN
+
+
+async def test_the_hardware_readings_carry_their_units(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, config_entry,
+    no_app_probes,
+) -> None:
+    mock_agent(aioclient_mock)
+    await setup(hass, config_entry)
+    frequency = hass.states.get("sensor.office_wall_cpu_frequency")
+    voltage = hass.states.get("sensor.office_wall_core_voltage")
+    assert frequency.state == "1500.0"
+    assert frequency.attributes["unit_of_measurement"] == "MHz"
+    assert voltage.state == "0.936"
+    assert voltage.attributes["unit_of_measurement"] == "V"
+
+
 # --- the cursor (jrackerby/kiosk-pi#9) ---------------------------------------
 
 async def test_the_cursor_reading_is_on_when_the_rule_applied(

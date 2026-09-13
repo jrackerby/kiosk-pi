@@ -108,6 +108,9 @@
       },
       "filesystem_read_only": {
         "name": "Filesystem read-only"
+      },
+      "display_connected": {
+        "name": "Display connected"
       }
     },
     "button": {
@@ -195,6 +198,15 @@
       },
       "monitor": {
         "name": "Monitor"
+      },
+      "browser_crashes": {
+        "name": "Browser crashes"
+      },
+      "cpu_frequency": {
+        "name": "CPU frequency"
+      },
+      "core_voltage": {
+        "name": "Core voltage"
       }
     },
     "switch": {

@@ -60,6 +60,11 @@ class KioskAgent:
         self._screen_off_by_timer = False
         self._overlay_text = ""
         self._error_substituted_for: str | None = None
+        # When the background loop last finished a tick. The systemd watchdog
+        # is fed from __main__ ONLY while this is recent, so a tick wedged
+        # inside a subprocess or a socket is what stops the pings — which is
+        # the one condition the watchdog exists to catch.
+        self._last_tick_at: float | None = None
 
         settings.add_listener(self._on_settings_changed)
 
@@ -123,8 +128,45 @@ class KioskAgent:
                 _LOGGER.exception("agent tick failed")
 
     def _tick(self) -> None:
+        self._check_display()
         self._check_error_page()
         self._check_idle_timers()
+        with self._lock:
+            self._last_tick_at = time.time()
+
+    @property
+    def last_tick_at(self) -> float | None:
+        with self._lock:
+            return self._last_tick_at
+
+    def loop_healthy(self, now: float | None = None,
+                     stale_after: float = TICK_SECONDS * 6) -> bool:
+        """Is the background loop alive AND recently through a tick.
+
+        Both halves matter. A dead thread is obvious; a live thread wedged
+        inside one tick is not, and `is_alive()` says yes for it for ever.
+        Six ticks of slack covers a slow Pi 3B with a screenshot in flight.
+        """
+        thread = self._thread
+        if thread is None or not thread.is_alive():
+            return False
+        last = self.last_tick_at
+        if last is None:
+            # Not through a first tick yet: healthy for as long as a first
+            # tick could reasonably take, judged from start.
+            last = self.started_at
+        now = time.time() if now is None else now
+        return (now - last) < stale_after
+
+    def _check_display(self) -> None:
+        """Feed the connector state to the supervisor and let it judge.
+
+        The read is sysfs, a few file opens; the judgement lives in the
+        supervisor because it owns the launch clock the decision depends on.
+        """
+        connected = device.display_connected(device.drm_connectors())
+        self.browser.note_display(connected)
+        self.browser.check_liveness()
 
     def _check_error_page(self) -> None:
         """Substitute the outage page when Chromium is showing its own error.
@@ -283,7 +325,8 @@ class KioskAgent:
     def restart_browser(self) -> dict[str, Any]:
         before = self.browser.restart_count
         self.browser.restart()
-        return {"restartRequested": True, "restartCountBefore": before}
+        return {"restartRequested": True, "restartCountBefore": before,
+                "countedAs": "commanded"}
 
     def clear_cache(self) -> dict[str, Any]:
         """Flush the HTTP and code caches through the browser itself.
@@ -354,6 +397,7 @@ class KioskAgent:
         """
         info = device.base_info()
         screen = self.display.state()
+        connectors = device.drm_connectors()
         running = self.browser.is_running()
         current_url = self.browser.current_url() if running else None
         # One extra CDP round trip on the poll, and it buys the only
@@ -371,8 +415,17 @@ class KioskAgent:
             "deviceName": str(self.settings.get("deviceName"))
                           or info.get("hostname"),
             "browserRunning": running,
+            # THE TOTAL AND ITS PARTS. `browserRestartCount` keeps its 1.0.0
+            # meaning (every relaunch) so nothing reading it moves; the crash
+            # count is the one that answers "is this browser dying".
             "browserRestartCount": self.browser.restart_count,
+            "browserCrashCount": self.browser.crash_count,
+            "browserCommandedRestartCount": self.browser.commanded_restart_count,
+            "browserWatchdogRestartCount": self.browser.watchdog_restart_count,
             "browserLastExitCode": self.browser.last_exit_code,
+            "browserLastExitReason": self.browser.last_exit_reason,
+            "browserResponsive": (current_url is not None) if running else False,
+            "browserHangSeconds": int(self.settings.get("browserHangSeconds")),
             "browserVersion": device.chromium_version(
                 str(self.settings.get("chromiumBinary"))
             ),
@@ -386,6 +439,13 @@ class KioskAgent:
             "screenBrightnessMax": screen["brightnessMax"],
             "screenInstrument": screen["instrument"],
             "displayOutput": screen["output"],
+            # The kernel's word, beside the compositor's: a connector list and
+            # whether any is plugged in. The compositor reports what it is
+            # driving, which with nothing connected is nothing — and that is
+            # indistinguishable, from the compositor alone, from a compositor
+            # that failed to start (jrackerby/HA#771).
+            "displayConnected": device.display_connected(connectors),
+            "displayConnectors": connectors,
             "displayMake": screen["make"],
             "displayModel": screen["model"],
             "resolution": screen["resolution"],

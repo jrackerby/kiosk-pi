@@ -162,6 +162,14 @@ SPECS: dict[str, _Spec] = {
     # --- browser ------------------------------------------------------------
     "browserRestartOnCrash": _Spec("bool", True, _as_bool),
     "browserRestartBackoffSeconds": _Spec("int", 5, _non_negative),
+    # How long a RUNNING browser may go without answering DevTools on a
+    # CONNECTED output before the agent restarts it. Process exit is not the
+    # only way a wall goes dark: a Chromium wedged on the GPU keeps its pid
+    # and its `active` unit while painting nothing, and only a liveness probe
+    # finds it. 0 disables the watchdog. Gated on the kernel reporting a
+    # connector plugged in, because with none there is no DevTools by design
+    # (see device.drm_connectors) and restarting would loop for ever.
+    "browserHangSeconds": _Spec("int", 120, _non_negative),
     "cdpPort": _Spec("int", 9222, _non_negative),
     "chromiumBinary": _Spec("string", "chromium", _as_str),
     "cageBinary": _Spec("string", "cage", _as_str),
