@@ -181,7 +181,7 @@ async def test_the_device_carries_every_reported_mac(
     assert await setup_entry(hass, config_entry)
 
     devices = dr.async_get(hass)
-    device = devices.async_get_device(identifiers={(DOMAIN, config_entry.entry_id)})
+    device = devices.async_get_device_by_identifier((DOMAIN, config_entry.entry_id), config_entry.entry_id)
     assert device is not None
     macs = {value for kind, value in device.connections
             if kind == dr.CONNECTION_NETWORK_MAC}
