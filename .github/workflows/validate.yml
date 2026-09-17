@@ -70,9 +70,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 3.14: the harness's current release needs it. On 3.13 pip resolves
+      # pytest-homeassistant-custom-component to a release pinning core
+      # 2026.2.3 -- older than the floor hacs.json claims -- so the suite
+      # was judging a core nobody runs (#27).
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - run: pip install -r requirements-test.txt
 

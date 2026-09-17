@@ -551,8 +551,8 @@ async def test_the_load_url_service_is_transient_and_does_not_rewrite_the_start_
     aioclient_mock.get(f"{BASE}?cmd=loadURL", json={"status": "OK"})
     await setup(hass, config_entry)
 
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, config_entry.entry_id)}
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, config_entry.entry_id), config_entry.entry_id
     )
     await hass.services.async_call(
         DOMAIN, "load_url",
