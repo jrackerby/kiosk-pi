@@ -139,6 +139,18 @@ repository's to record.
   (`/var/lib/pikioskd`), never under `/home`; `tests/test_unit_sandbox.py` joins
   the unit's writable set to the settings default so the two cannot drift again.
   Measured on the first panel, on 1.0.0's first hardware install.
+- **THE SAME DIRECTIVE KILLS THE GPU, AND THE WALL STILL DRAWS.** Mesa writes
+  its shader cache to `$XDG_CACHE_HOME`, falling back to `~/.cache`; with that
+  read-only, Chromium's GPU process segfaults at start (`exit_code=11`), and
+  after its retries Chromium relaunches it with `--use-gl=disabled` and
+  composites on the CPU. Nothing fails: the board renders, slowly and hot — a
+  Pi 4 at 2560x1440 ran its GPU process at 99% CPU and ~2 fps. The tell is
+  `--use-gl=disabled` on the `--type=gpu-process` command line, or
+  `SystemInfo.getInfo` over CDP reading `gpu_compositing: disabled_software`.
+  The browser's stderr goes to `DEVNULL`, so reproduce with `systemd-run`
+  carrying the unit's sandbox properties and `--enable-logging=stderr`,
+  toggling one property at a time. The unit sets `XDG_CACHE_HOME` inside its
+  `StateDirectory` (GH-29).
 - **`NoNewPrivileges=yes` FORBIDS `sudo` ENTIRELY, AND THE FAILURE IS SILENT.**
   It sets `PR_SET_NO_NEW_PRIVS`, which stops a setuid binary elevating at all;
   sudo does not degrade, it refuses — `sudo: The "no new privileges" flag is
