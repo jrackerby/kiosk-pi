@@ -368,6 +368,11 @@ than left as deployment detail.
   which is fine. The profile lives in the unit's `StateDirectory`
   (`/var/lib/pikioskd`), and `tests/test_unit_sandbox.py` joins the unit's
   writable set to the settings default so the two cannot drift apart again.
+- **`ProtectHome=read-only` also crashes the GPU process, and the wall still
+  draws.** Mesa's shader cache defaults to `~/.cache`; unable to write it, the
+  GPU process segfaults at start and Chromium falls back to software rendering
+  (`--use-gl=disabled`). The unit sets `XDG_CACHE_HOME=/var/lib/pikioskd/cache`
+  and the same test file asserts it stays under a writable root (GH-29).
 - **`NoNewPrivileges=yes` forbids `sudo` entirely, silently.** It sets
   `PR_SET_NO_NEW_PRIVS`, which stops a setuid binary elevating at all; sudo does
   not degrade, it refuses. A no-password sudoers drop-in grants nothing while it
@@ -376,7 +381,7 @@ than left as deployment detail.
   and the panel never rebooted. **Prove the privilege with a cheap `sudo -n
   true` before promising the action**, never with the real command.
 
-Both have the same shape: a sandbox directive forbidding the one thing the
+All three have the same shape: a sandbox directive forbidding the one thing the
 service exists to do, reported by nothing.
 
 The unit also carries the agent's own recovery, each directive joined to the

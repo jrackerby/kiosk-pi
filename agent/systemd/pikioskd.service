@@ -41,6 +41,15 @@ Environment=PYTHONPATH=/opt/pikioskd
 # display.py and browser.py both DEFER to an XDG_RUNTIME_DIR already in the
 # environment, so this is the single place it is decided for a systemd start.
 Environment=XDG_RUNTIME_DIR=/run/kiosk-wayland
+# MESA'S SHADER CACHE LIVES HERE, NOT UNDER /home. Mesa writes it to
+# $XDG_CACHE_HOME, falling back to ~/.cache, which ProtectHome=read-only makes
+# unwritable — and the GPU process then SEGFAULTS at start instead of running
+# uncached. Chromium retries, gives up, relaunches it with --use-gl=disabled
+# and renders every frame on the CPU; the wall still draws, so nothing reads
+# as broken. Measured on a Pi 4 at 2560x1440: GPU process at 99% CPU, ~2 fps.
+# Inside StateDirectory, so it is writable by construction; Mesa creates the
+# last path component itself. test_unit_sandbox.py asserts it stays writable.
+Environment=XDG_CACHE_HOME=/var/lib/pikioskd/cache
 RuntimeDirectory=kiosk-wayland
 RuntimeDirectoryMode=0700
 

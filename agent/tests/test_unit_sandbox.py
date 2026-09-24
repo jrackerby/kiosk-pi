@@ -67,6 +67,43 @@ def test_the_browser_directories_are_writable_under_the_sandbox(key):
     )
 
 
+def _environment() -> dict:
+    """Environment= lines, which repeat; configparser keeps only the last."""
+    env = {}
+    for line in UNIT_PATH.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("Environment="):
+            key, _, value = line[len("Environment="):].partition("=")
+            env[key] = value
+    return env
+
+
+def test_the_gpu_shader_cache_is_writable_under_the_sandbox():
+    """Mesa must be able to write its shader cache, or the GPU process dies.
+
+    With ~/.cache read-only the V3D path segfaults at start (exit 11), Chromium
+    falls back to --use-gl=disabled, and the panel renders on the CPU while
+    looking healthy. Measured on a Pi 4 under this unit's sandbox (GH-29).
+    """
+    parser = _unit()
+    cache = _environment().get("XDG_CACHE_HOME")
+    assert cache, (
+        "pikioskd.service sets no XDG_CACHE_HOME, so Mesa falls back to "
+        "~/.cache, which ProtectHome=read-only leaves unwritable"
+    )
+    assert _is_under(cache, writable_roots(parser)), (
+        f"XDG_CACHE_HOME={cache!r} is not under a writable root "
+        f"({sorted(writable_roots(parser))}); the GPU process will crash"
+    )
+
+
+def test_the_environment_parse_can_fail():
+    """Self-test: every Environment= line is read, not just the last one."""
+    env = _environment()
+    assert env.get("PYTHONPATH") == "/opt/pikioskd"
+    assert "NO_SUCH_VARIABLE" not in env
+
+
 def test_protect_home_is_actually_on():
     """The check above is only meaningful while the sandbox is real."""
     assert _unit()["Service"].get("ProtectHome", "no").strip() == "read-only"
